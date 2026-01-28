@@ -1,0 +1,76 @@
+# Docker Compose para WebApp Análise de Crédito
+# Desenvolvimento overnight para Lucas
+
+version: '3.8'
+
+services:
+  # Frontend React
+  frontend:
+    build:
+      context: ../frontend
+      dockerfile: ../docker/Dockerfile.frontend
+    ports:
+      - "3000:3000"
+    environment:
+      - REACT_APP_API_URL=http://localhost:5000
+    volumes:
+      - ../frontend:/app
+      - /app/node_modules
+    depends_on:
+      - backend
+
+  # Backend Node.js
+  backend:
+    build:
+      context: ../backend  
+      dockerfile: ../docker/Dockerfile.backend
+    ports:
+      - "5000:5000"
+    environment:
+      - NODE_ENV=development
+      - PORT=5000
+      - DB_HOST=oracle-db
+      - DB_PORT=1521
+      - DB_SERVICE=XEPDB1
+      - DB_USER=credito_user
+      - DB_PASSWORD=credito_pass
+      - JWT_SECRET=webapp_credito_jwt_secret_overnight_development
+    volumes:
+      - ../backend:/app
+      - /app/node_modules
+    depends_on:
+      - oracle-db
+
+  # Oracle Database (para desenvolvimento)
+  oracle-db:
+    image: container-registry.oracle.com/database/express:21.3.0-xe
+    ports:
+      - "1521:1521"
+      - "5500:5500"  # Oracle Enterprise Manager
+    environment:
+      - ORACLE_PWD=OraclePassw0rd
+      - ORACLE_CHARACTERSET=AL32UTF8
+    volumes:
+      - oracle-data:/opt/oracle/oradata
+      - ../database/01_estrutura_tabelas.sql:/docker-entrypoint-initdb.d/01_estrutura.sql:ro
+
+  # SQLite para dados fake (desenvolvimento rápido)
+  sqlite-setup:
+    image: alpine:latest
+    volumes:
+      - ../database:/database
+      - sqlite-data:/data
+    command: |
+      sh -c "
+        apk add --no-cache sqlite &&
+        cp /database/*.sql /data/ &&
+        echo 'SQLite setup concluído'
+      "
+
+volumes:
+  oracle-data:
+  sqlite-data:
+
+networks:
+  default:
+    name: webapp-credito-network
