@@ -248,7 +248,7 @@ router.post('/', requireRole(['ADMIN']), async (req, res, next) => {
         id: { dir: oracledb.BIND_OUT, type: oracledb.NUMBER }
       });
 
-      const newId = result.outBinds?.id?.[0];
+      const newId = (result.outBinds as any)?.id?.[0];
 
       logger.info(`Nova configuração criada por: ${req.user?.nome}`, { 
         chave, valor, tipo 

@@ -313,7 +313,7 @@ class DataSeeder {
           id: { dir: oracledb.BIND_OUT, type: oracledb.NUMBER }
         });
         
-        clienteIds.push(result.outBinds?.id?.[0]);
+        clienteIds.push((result.outBinds as any)?.id?.[0]);
       }
       
       logger.info(`✅ ${clienteIds.length} clientes inseridos`);
@@ -333,7 +333,7 @@ class DataSeeder {
           id: { dir: oracledb.BIND_OUT, type: oracledb.NUMBER }
         });
         
-        const duplicataId = result.outBinds?.id?.[0];
+        const duplicataId = (result.outBinds as any)?.id?.[0];
         
         if (duplicata.status === 'PAGA') {
           duplicatasPagas.push({
