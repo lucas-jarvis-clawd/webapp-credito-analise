@@ -1,35 +1,30 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Container,
-  Grid,
-  Card,
-  CardContent,
   Typography,
   Box,
-  Avatar,
-  Chip,
-  LinearProgress,
-  TextField,
-  InputAdornment,
-  IconButton,
   Button,
+  Tabs,
+  Tab,
   Paper,
-  Divider
+  Grid,
+  Card,
+  CardContent
 } from '@mui/material';
 import {
-  Search,
-  Person,
-  TrendingUp,
-  TrendingDown,
-  AccountBalance,
-  Assessment,
-  FilterList,
-  Refresh
+  Refresh,
+  Dashboard as DashboardIcon,
+  TableChart,
+  BarChart,
+  Settings
 } from '@mui/icons-material';
 import { Client, DashboardStats } from '../../types';
-import { useNavigate } from 'react-router-dom';
+import MetricsCards from './MetricsCards';
+import ChartsSection from './ChartsSection';
+import ClientsTable from './ClientsTable';
+import FiltersSection, { FilterState } from './FiltersSection';
 
-// Mock data for demonstration
+// Mock data expandido para demonstração
 const mockClients: Client[] = [
   {
     id: '1',
@@ -86,6 +81,160 @@ const mockClients: Client[] = [
     status: 'active',
     totalDebt: 1800,
     monthlyIncome: 9500
+  },
+  {
+    id: '5',
+    name: 'Pedro Almeida',
+    document: '321.654.987-12',
+    email: 'pedro@email.com',
+    phone: '(11) 55555-5555',
+    creditScore: 690,
+    riskLevel: 'low',
+    creditLimit: 10000,
+    lastAnalysisDate: new Date('2024-01-16'),
+    status: 'active',
+    totalDebt: 3200,
+    monthlyIncome: 7500
+  },
+  {
+    id: '6',
+    name: 'Empresa ABC Ltda',
+    document: '12.345.678/0001-90',
+    email: 'contato@abc.com',
+    phone: '(11) 3333-4444',
+    creditScore: 750,
+    riskLevel: 'low',
+    creditLimit: 50000,
+    lastAnalysisDate: new Date('2024-01-15'),
+    status: 'active',
+    totalDebt: 12000,
+    monthlyIncome: 45000
+  },
+  {
+    id: '7',
+    name: 'Comercial XYZ S/A',
+    document: '98.765.432/0001-10',
+    email: 'financeiro@xyz.com',
+    phone: '(11) 2222-3333',
+    creditScore: 620,
+    riskLevel: 'medium',
+    creditLimit: 25000,
+    lastAnalysisDate: new Date('2024-01-14'),
+    status: 'pending',
+    totalDebt: 18000,
+    monthlyIncome: 32000
+  },
+  {
+    id: '8',
+    name: 'Indústria DEF Ltda',
+    document: '11.222.333/0001-44',
+    email: 'vendas@def.com',
+    phone: '(11) 1111-2222',
+    creditScore: 480,
+    riskLevel: 'high',
+    creditLimit: 8000,
+    lastAnalysisDate: new Date('2024-01-13'),
+    status: 'inactive',
+    totalDebt: 35000,
+    monthlyIncome: 28000
+  },
+  {
+    id: '9',
+    name: 'Fernanda Lima',
+    document: '444.555.666-77',
+    email: 'fernanda@email.com',
+    phone: '(11) 9999-8888',
+    creditScore: 710,
+    riskLevel: 'low',
+    creditLimit: 13000,
+    lastAnalysisDate: new Date('2024-01-12'),
+    status: 'active',
+    totalDebt: 2800,
+    monthlyIncome: 8500
+  },
+  {
+    id: '10',
+    name: 'Roberto Ferreira',
+    document: '777.888.999-00',
+    email: 'roberto@email.com',
+    phone: '(11) 7777-6666',
+    creditScore: 580,
+    riskLevel: 'medium',
+    creditLimit: 6000,
+    lastAnalysisDate: new Date('2024-01-11'),
+    status: 'pending',
+    totalDebt: 7200,
+    monthlyIncome: 5500
+  },
+  {
+    id: '11',
+    name: 'Startup Tech Ltda',
+    document: '55.666.777/0001-88',
+    email: 'admin@startup.com',
+    phone: '(11) 5555-4444',
+    creditScore: 640,
+    riskLevel: 'medium',
+    creditLimit: 20000,
+    lastAnalysisDate: new Date('2024-01-10'),
+    status: 'active',
+    totalDebt: 15000,
+    monthlyIncome: 38000
+  },
+  {
+    id: '12',
+    name: 'Luana Rodrigues',
+    document: '999.000.111-22',
+    email: 'luana@email.com',
+    phone: '(11) 8888-7777',
+    creditScore: 760,
+    riskLevel: 'low',
+    creditLimit: 18000,
+    lastAnalysisDate: new Date('2024-01-09'),
+    status: 'active',
+    totalDebt: 4500,
+    monthlyIncome: 9800
+  },
+  {
+    id: '13',
+    name: 'Gabriel Mendes',
+    document: '333.444.555-66',
+    email: 'gabriel@email.com',
+    phone: '(11) 6666-5555',
+    creditScore: 510,
+    riskLevel: 'high',
+    creditLimit: 4000,
+    lastAnalysisDate: new Date('2024-01-08'),
+    status: 'inactive',
+    totalDebt: 9800,
+    monthlyIncome: 4200
+  },
+  {
+    id: '14',
+    name: 'Consultoria ABC',
+    document: '22.333.444/0001-55',
+    email: 'contato@consultoria.com',
+    phone: '(11) 4444-3333',
+    creditScore: 685,
+    riskLevel: 'low',
+    creditLimit: 35000,
+    lastAnalysisDate: new Date('2024-01-07'),
+    status: 'active',
+    totalDebt: 22000,
+    monthlyIncome: 42000
+  },
+  {
+    id: '15',
+    name: 'Juliana Sousa',
+    document: '666.777.888-99',
+    email: 'juliana@email.com',
+    phone: '(11) 3333-2222',
+    creditScore: 730,
+    riskLevel: 'low',
+    creditLimit: 16000,
+    lastAnalysisDate: new Date('2024-01-06'),
+    status: 'active',
+    totalDebt: 3600,
+    monthlyIncome: 8800
   }
 ];
 
@@ -102,45 +251,126 @@ const mockStats: DashboardStats = {
   monthlyRejections: 23
 };
 
-const DashboardPage: React.FC = () => {
-  const [clients, setClients] = useState<Client[]>(mockClients);
-  const [filteredClients, setFilteredClients] = useState<Client[]>(mockClients);
+interface TabPanelProps {
+  children?: React.ReactNode;
+  index: number;
+  value: number;
+}
+
+function TabPanel(props: TabPanelProps) {
+  const { children, value, index, ...other } = props;
+
+  return (
+    <div
+      role="tabpanel"
+      hidden={value !== index}
+      id={`dashboard-tabpanel-${index}`}
+      aria-labelledby={`dashboard-tab-${index}`}
+      {...other}
+    >
+      {value === index && (
+        <Box sx={{ py: 3 }}>
+          {children}
+        </Box>
+      )}
+    </div>
+  );
+}
+
+const DashboardPageNew: React.FC = () => {
+  const [clients] = useState<Client[]>(mockClients);
   const [stats] = useState<DashboardStats>(mockStats);
-  const [searchTerm, setSearchTerm] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const navigate = useNavigate();
+  const [tabValue, setTabValue] = useState(0);
+  const [filters, setFilters] = useState<FilterState>({
+    searchTerm: '',
+    riskLevel: 'all',
+    status: 'all',
+    scoreRange: [300, 850],
+    creditLimitMin: 0,
+    creditLimitMax: 100000,
+    dateFrom: null,
+    dateTo: null,
+    sortBy: 'lastAnalysisDate',
+    sortOrder: 'desc',
+    showOnlyRecentAnalysis: false
+  });
 
-  useEffect(() => {
-    const filtered = clients.filter(client =>
-      client.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      client.document.includes(searchTerm) ||
-      client.email.toLowerCase().includes(searchTerm.toLowerCase())
-    );
-    setFilteredClients(filtered);
-  }, [searchTerm, clients]);
+  const filteredClients = useMemo(() => {
+    return clients.filter(client => {
+      // Filtro de busca
+      if (filters.searchTerm && !client.name.toLowerCase().includes(filters.searchTerm.toLowerCase()) &&
+          !client.document.includes(filters.searchTerm) &&
+          !client.email.toLowerCase().includes(filters.searchTerm.toLowerCase())) {
+        return false;
+      }
 
-  const getRiskColor = (riskLevel: string) => {
-    switch (riskLevel) {
-      case 'low': return 'success';
-      case 'medium': return 'warning';
-      case 'high': return 'error';
-      default: return 'default';
-    }
-  };
+      // Filtro de nível de risco
+      if (filters.riskLevel !== 'all' && client.riskLevel !== filters.riskLevel) {
+        return false;
+      }
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'active': return 'success';
-      case 'pending': return 'warning';
-      case 'inactive': return 'error';
-      default: return 'default';
-    }
-  };
+      // Filtro de status
+      if (filters.status !== 'all' && client.status !== filters.status) {
+        return false;
+      }
 
-  const getScoreColor = (score: number) => {
-    if (score >= 700) return '#4caf50';
-    if (score >= 600) return '#ff9800';
-    return '#f44336';
+      // Filtro de score
+      if (client.creditScore < filters.scoreRange[0] || client.creditScore > filters.scoreRange[1]) {
+        return false;
+      }
+
+      // Filtro de limite de crédito
+      if (client.creditLimit < filters.creditLimitMin || client.creditLimit > filters.creditLimitMax) {
+        return false;
+      }
+
+      // Filtro de data
+      if (filters.dateFrom && client.lastAnalysisDate < filters.dateFrom) {
+        return false;
+      }
+
+      if (filters.dateTo && client.lastAnalysisDate > filters.dateTo) {
+        return false;
+      }
+
+      // Filtro de análises recentes (últimos 30 dias)
+      if (filters.showOnlyRecentAnalysis) {
+        const thirtyDaysAgo = new Date();
+        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+        if (client.lastAnalysisDate < thirtyDaysAgo) {
+          return false;
+        }
+      }
+
+      return true;
+    }).sort((a, b) => {
+      const key = filters.sortBy as keyof Client;
+      const aValue = a[key];
+      const bValue = b[key];
+      
+      if (key === 'lastAnalysisDate') {
+        const aTime = new Date(aValue as Date).getTime();
+        const bTime = new Date(bValue as Date).getTime();
+        return filters.sortOrder === 'asc' ? aTime - bTime : bTime - aTime;
+      }
+      
+      if (typeof aValue === 'string' && typeof bValue === 'string') {
+        return filters.sortOrder === 'asc' 
+          ? aValue.localeCompare(bValue)
+          : bValue.localeCompare(aValue);
+      }
+      
+      if (typeof aValue === 'number' && typeof bValue === 'number') {
+        return filters.sortOrder === 'asc' ? aValue - bValue : bValue - aValue;
+      }
+      
+      return 0;
+    });
+  }, [clients, filters]);
+
+  const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
+    setTabValue(newValue);
   };
 
   const handleRefresh = () => {
@@ -151,238 +381,157 @@ const DashboardPage: React.FC = () => {
     }, 1000);
   };
 
+  const handleFiltersChange = (newFilters: FilterState) => {
+    setFilters(newFilters);
+  };
+
   return (
     <Container maxWidth="xl" sx={{ py: 3 }}>
       {/* Header */}
       <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
-        <Typography variant="h4" component="h1" fontWeight="bold" color="primary">
-          Dashboard de Análise de Crédito
-        </Typography>
+        <Box>
+          <Typography variant="h4" component="h1" fontWeight="bold" color="primary.main">
+            Dashboard de Análise de Crédito
+          </Typography>
+          <Typography variant="body1" color="text.secondary" mt={1}>
+            Sistema Inteligente de Análise e Gestão de Crédito
+          </Typography>
+        </Box>
         <Button
-          variant="outlined"
+          variant="contained"
           startIcon={<Refresh />}
           onClick={handleRefresh}
           disabled={isLoading}
+          size="large"
         >
           {isLoading ? 'Atualizando...' : 'Atualizar'}
         </Button>
       </Box>
 
-      {/* Stats Cards */}
-      <Grid container spacing={3} mb={4}>
-        <Grid item xs={12} sm={6} md={3}>
-          <Card elevation={3}>
-            <CardContent>
-              <Box display="flex" alignItems="center" justifyContent="space-between">
-                <Box>
-                  <Typography color="textSecondary" gutterBottom>
-                    Total de Clientes
-                  </Typography>
-                  <Typography variant="h4" component="div" fontWeight="bold">
-                    {stats.totalClients.toLocaleString()}
-                  </Typography>
-                </Box>
-                <Avatar sx={{ bgcolor: 'primary.main' }}>
-                  <Person />
-                </Avatar>
-              </Box>
-            </CardContent>
-          </Card>
-        </Grid>
+      {/* Métricas Principais */}
+      <Box mb={4}>
+        <MetricsCards stats={stats} />
+      </Box>
 
-        <Grid item xs={12} sm={6} md={3}>
-          <Card elevation={3}>
-            <CardContent>
-              <Box display="flex" alignItems="center" justifyContent="space-between">
-                <Box>
-                  <Typography color="textSecondary" gutterBottom>
-                    Análises Ativas
-                  </Typography>
-                  <Typography variant="h4" component="div" fontWeight="bold">
-                    {stats.activeAnalyses}
-                  </Typography>
-                </Box>
-                <Avatar sx={{ bgcolor: 'info.main' }}>
-                  <Assessment />
-                </Avatar>
-              </Box>
-            </CardContent>
-          </Card>
-        </Grid>
-
-        <Grid item xs={12} sm={6} md={3}>
-          <Card elevation={3}>
-            <CardContent>
-              <Box display="flex" alignItems="center" justifyContent="space-between">
-                <Box>
-                  <Typography color="textSecondary" gutterBottom>
-                    Score Médio
-                  </Typography>
-                  <Typography variant="h4" component="div" fontWeight="bold">
-                    {stats.averageScore}
-                  </Typography>
-                </Box>
-                <Avatar sx={{ bgcolor: 'success.main' }}>
-                  <TrendingUp />
-                </Avatar>
-              </Box>
-            </CardContent>
-          </Card>
-        </Grid>
-
-        <Grid item xs={12} sm={6} md={3}>
-          <Card elevation={3}>
-            <CardContent>
-              <Box display="flex" alignItems="center" justifyContent="space-between">
-                <Box>
-                  <Typography color="textSecondary" gutterBottom>
-                    Taxa de Aprovação
-                  </Typography>
-                  <Typography variant="h4" component="div" fontWeight="bold" color="success.main">
-                    {Math.round((stats.monthlyApprovals / (stats.monthlyApprovals + stats.monthlyRejections)) * 100)}%
-                  </Typography>
-                </Box>
-                <Avatar sx={{ bgcolor: 'success.main' }}>
-                  <AccountBalance />
-                </Avatar>
-              </Box>
-            </CardContent>
-          </Card>
-        </Grid>
-      </Grid>
-
-      {/* Search and Filters */}
-      <Paper elevation={2} sx={{ p: 2, mb: 3 }}>
-        <Grid container spacing={2} alignItems="center">
-          <Grid item xs={12} md={8}>
-            <TextField
-              fullWidth
-              placeholder="Buscar por nome, documento ou email..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              InputProps={{
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <Search />
-                  </InputAdornment>
-                )
-              }}
-            />
-          </Grid>
-          <Grid item xs={12} md={4}>
-            <Button
-              variant="outlined"
-              startIcon={<FilterList />}
-              fullWidth
-            >
-              Filtros Avançados
-            </Button>
-          </Grid>
-        </Grid>
+      {/* Navegação por Tabs */}
+      <Paper elevation={3} sx={{ mb: 3 }}>
+        <Tabs
+          value={tabValue}
+          onChange={handleTabChange}
+          indicatorColor="primary"
+          textColor="primary"
+          variant="fullWidth"
+          sx={{
+            '& .MuiTab-root': {
+              py: 2,
+              px: 3,
+              fontWeight: 600,
+              fontSize: '1rem'
+            }
+          }}
+        >
+          <Tab
+            icon={<DashboardIcon />}
+            label="Visão Geral"
+            iconPosition="start"
+          />
+          <Tab
+            icon={<BarChart />}
+            label="Gráficos e Análises"
+            iconPosition="start"
+          />
+          <Tab
+            icon={<TableChart />}
+            label="Lista de Clientes"
+            iconPosition="start"
+          />
+        </Tabs>
       </Paper>
 
-      {/* Client Cards */}
-      <Grid container spacing={3}>
-        {filteredClients.map((client) => (
-          <Grid item xs={12} sm={6} lg={4} key={client.id}>
-            <Card 
-              elevation={3} 
-              sx={{ 
-                cursor: 'pointer',
-                transition: 'transform 0.2s, box-shadow 0.2s',
-                '&:hover': {
-                  transform: 'translateY(-4px)',
-                  boxShadow: 6
-                }
-              }}
-              onClick={() => navigate(`/client/${client.id}`)}
-            >
+      {/* Conteúdo das Tabs */}
+      <TabPanel value={tabValue} index={0}>
+        {/* Visão Geral - Resumo */}
+        <Grid container spacing={3}>
+          <Grid item xs={12} lg={8}>
+            <Card elevation={3}>
               <CardContent>
-                <Box display="flex" alignItems="center" mb={2}>
-                  <Avatar sx={{ bgcolor: 'primary.main', mr: 2 }}>
-                    {client.name.charAt(0)}
-                  </Avatar>
-                  <Box flexGrow={1}>
-                    <Typography variant="h6" component="div">
-                      {client.name}
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      {client.document}
-                    </Typography>
-                  </Box>
-                  <Chip
-                    label={client.status}
-                    color={getStatusColor(client.status) as any}
-                    size="small"
-                  />
-                </Box>
-
-                <Box mb={2}>
-                  <Box display="flex" justifyContent="space-between" alignItems="center" mb={1}>
-                    <Typography variant="body2" color="text.secondary">
-                      Score de Crédito
-                    </Typography>
-                    <Typography 
-                      variant="h6" 
-                      sx={{ color: getScoreColor(client.creditScore), fontWeight: 'bold' }}
-                    >
-                      {client.creditScore}
-                    </Typography>
-                  </Box>
-                  <LinearProgress
-                    variant="determinate"
-                    value={(client.creditScore / 850) * 100}
-                    sx={{
-                      height: 8,
-                      borderRadius: 4,
-                      backgroundColor: 'grey.200',
-                      '& .MuiLinearProgress-bar': {
-                        backgroundColor: getScoreColor(client.creditScore),
-                        borderRadius: 4
-                      }
-                    }}
-                  />
-                </Box>
-
-                <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
-                  <Box>
-                    <Typography variant="body2" color="text.secondary">
-                      Limite de Crédito
-                    </Typography>
-                    <Typography variant="h6" color="primary.main" fontWeight="bold">
-                      R$ {client.creditLimit.toLocaleString()}
-                    </Typography>
-                  </Box>
-                  <Chip
-                    label={client.riskLevel}
-                    color={getRiskColor(client.riskLevel) as any}
-                    size="small"
-                  />
-                </Box>
-
-                <Divider sx={{ my: 1 }} />
-
-                <Typography variant="caption" color="text.secondary">
-                  Última análise: {client.lastAnalysisDate.toLocaleDateString('pt-BR')}
+                <Typography variant="h6" fontWeight="bold" mb={2}>
+                  Resumo Executivo
                 </Typography>
+                <Typography variant="body1" mb={2}>
+                  O sistema está processando <strong>{stats.totalClients}</strong> clientes com um score médio de <strong>{stats.averageScore}</strong> pontos. 
+                  A taxa de aprovação atual é de <strong>{Math.round((stats.monthlyApprovals / (stats.monthlyApprovals + stats.monthlyRejections)) * 100)}%</strong>, 
+                  demonstrando um excelente controle de risco.
+                </Typography>
+                <Box display="flex" gap={2} mt={3}>
+                  <Box textAlign="center">
+                    <Typography variant="h4" color="success.main" fontWeight="bold">
+                      {stats.riskDistribution.low}%
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      Baixo Risco
+                    </Typography>
+                  </Box>
+                  <Box textAlign="center">
+                    <Typography variant="h4" color="warning.main" fontWeight="bold">
+                      {stats.riskDistribution.medium}%
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      Médio Risco
+                    </Typography>
+                  </Box>
+                  <Box textAlign="center">
+                    <Typography variant="h4" color="error.main" fontWeight="bold">
+                      {stats.riskDistribution.high}%
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      Alto Risco
+                    </Typography>
+                  </Box>
+                </Box>
               </CardContent>
             </Card>
           </Grid>
-        ))}
-      </Grid>
+          <Grid item xs={12} lg={4}>
+            <Card elevation={3}>
+              <CardContent>
+                <Typography variant="h6" fontWeight="bold" mb={2}>
+                  Ações Rápidas
+                </Typography>
+                <Box display="flex" flexDirection="column" gap={2}>
+                  <Button variant="outlined" startIcon={<DashboardIcon />} fullWidth>
+                    Nova Análise de Crédito
+                  </Button>
+                  <Button variant="outlined" startIcon={<BarChart />} fullWidth>
+                    Relatório Mensal
+                  </Button>
+                  <Button variant="outlined" startIcon={<Settings />} fullWidth>
+                    Configurar Métricas
+                  </Button>
+                </Box>
+              </CardContent>
+            </Card>
+          </Grid>
+        </Grid>
+      </TabPanel>
 
-      {filteredClients.length === 0 && (
-        <Paper elevation={2} sx={{ p: 4, textAlign: 'center', mt: 3 }}>
-          <Typography variant="h6" color="text.secondary" mb={1}>
-            Nenhum cliente encontrado
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            Tente ajustar os termos de busca ou filtros
-          </Typography>
-        </Paper>
-      )}
+      <TabPanel value={tabValue} index={1}>
+        {/* Gráficos e Análises */}
+        <ChartsSection stats={stats} />
+      </TabPanel>
+
+      <TabPanel value={tabValue} index={2}>
+        {/* Lista de Clientes com Filtros */}
+        <Box>
+          <FiltersSection 
+            onFiltersChange={handleFiltersChange}
+            totalResults={filteredClients.length}
+          />
+          <ClientsTable clients={filteredClients} />
+        </Box>
+      </TabPanel>
     </Container>
   );
 };
 
-export default DashboardPage;
+export default DashboardPageNew;
