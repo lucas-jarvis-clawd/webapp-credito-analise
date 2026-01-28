@@ -1,6 +1,7 @@
 import { getConnection } from '../database/connection';
 import { LimiteCredito } from '../models/types';
 import { logger } from '../utils/logger';
+import oracledb from 'oracledb';
 
 export class LimitService {
 
@@ -41,7 +42,7 @@ export class LimitService {
         clienteId,
         limiteSolicitado,
         motivo,
-        id: { dir: require('oracledb').BIND_OUT, type: require('oracledb').NUMBER }
+        id: { dir: oracledb.BIND_OUT, type: oracledb.NUMBER }
       });
 
       const newId = result.outBinds?.id?.[0];

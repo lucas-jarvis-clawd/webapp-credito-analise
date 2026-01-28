@@ -1,5 +1,6 @@
 import express from 'express';
 import Joi from 'joi';
+import oracledb from 'oracledb';
 import { getConnection } from '../database/connection';
 import { authMiddleware, requireRole } from '../middleware/auth';
 import { AppError } from '../middleware/errorHandler';
@@ -244,7 +245,7 @@ router.post('/', requireRole(['ADMIN']), async (req, res, next) => {
         valor,
         descricao: descricao || null,
         tipo: tipo || 'STRING',
-        id: { dir: require('oracledb').BIND_OUT, type: require('oracledb').NUMBER }
+        id: { dir: oracledb.BIND_OUT, type: oracledb.NUMBER }
       });
 
       const newId = result.outBinds?.id?.[0];
