@@ -44,24 +44,12 @@ const theme = createTheme({
   },
   typography: {
     fontFamily: '"Roboto", "Helvetica", "Arial", sans-serif',
-    h1: {
-      fontWeight: 600
-    },
-    h2: {
-      fontWeight: 600
-    },
-    h3: {
-      fontWeight: 600
-    },
-    h4: {
-      fontWeight: 600
-    },
-    h5: {
-      fontWeight: 600
-    },
-    h6: {
-      fontWeight: 600
-    }
+    h1: { fontWeight: 600 },
+    h2: { fontWeight: 600 },
+    h3: { fontWeight: 600 },
+    h4: { fontWeight: 600 },
+    h5: { fontWeight: 600 },
+    h6: { fontWeight: 600 }
   },
   shape: {
     borderRadius: 8
@@ -100,21 +88,85 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
   const { isAuthenticated, isLoading } = useAuth();
 
   if (isLoading) {
-    return <div>Carregando...</div>;
+    return (
+      <div style={{ padding: '20px', textAlign: 'center' }}>
+        <h2>Carregando...</h2>
+      </div>
+    );
   }
 
   return isAuthenticated ? <>{children}</> : <Navigate to="/login" replace />;
 };
 
-// Public Route component (redirect to dashboard if authenticated)
+// Public Route component
 const PublicRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { isAuthenticated, isLoading } = useAuth();
 
   if (isLoading) {
-    return <div>Carregando...</div>;
+    return (
+      <div style={{ padding: '20px', textAlign: 'center' }}>
+        <h2>Carregando...</h2>
+      </div>
+    );
   }
 
   return !isAuthenticated ? <>{children}</> : <Navigate to="/dashboard" replace />;
+};
+
+const AppContent: React.FC = () => {
+  return (
+    <Routes>
+      <Route 
+        path="/login" 
+        element={
+          <PublicRoute>
+            <LoginPage />
+          </PublicRoute>
+        } 
+      />
+      <Route
+        path="/dashboard"
+        element={
+          <ProtectedRoute>
+            <MainLayout>
+              <DashboardPage />
+            </MainLayout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/client/:id"
+        element={
+          <ProtectedRoute>
+            <MainLayout>
+              <ClientAnalysisPage />
+            </MainLayout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/client/:id/credit-limit"
+        element={
+          <ProtectedRoute>
+            <MainLayout>
+              <CreditLimitForm />
+            </MainLayout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/metrics-config"
+        element={
+          <ProtectedRoute>
+            <MainLayout>
+              <MetricsConfigPage />
+            </MainLayout>
+          </ProtectedRoute>
+        }
+      />
+      <Route path="/" element={<Navigate to="/dashboard" replace />} />
+    </Routes>
+  );
 };
 
 const App: React.FC = () => {
@@ -123,35 +175,7 @@ const App: React.FC = () => {
       <CssBaseline />
       <AuthProvider>
         <Router>
-          <Routes>
-            {/* Public routes */}
-            <Route 
-              path="/login" 
-              element={
-                <PublicRoute>
-                  <LoginPage />
-                </PublicRoute>
-              } 
-            />
-
-            {/* Protected routes with layout */}
-            <Route
-              path="/*"
-              element={
-                <ProtectedRoute>
-                  <MainLayout>
-                    <Routes>
-                      <Route path="/dashboard" element={<DashboardPage />} />
-                      <Route path="/client/:id" element={<ClientAnalysisPage />} />
-                      <Route path="/client/:id/credit-limit" element={<CreditLimitForm />} />
-                      <Route path="/metrics-config" element={<MetricsConfigPage />} />
-                      <Route path="/" element={<Navigate to="/dashboard" replace />} />
-                    </Routes>
-                  </MainLayout>
-                </ProtectedRoute>
-              }
-            />
-          </Routes>
+          <AppContent />
         </Router>
       </AuthProvider>
     </ThemeProvider>

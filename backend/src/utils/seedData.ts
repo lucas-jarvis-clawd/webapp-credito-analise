@@ -354,7 +354,7 @@ class DataSeeder {
         await connection.execute(`
           INSERT INTO f_pagamentos (duplicata_id, valor_pago, data_pagamento, forma_pagamento, observacoes)
           VALUES (:duplicata_id, :valor_pago, :data_pagamento, :forma_pagamento, :observacoes)
-        `, pagamento);
+        `, pagamento as any);
       }
       
       logger.info(`✅ ${pagamentos.length} pagamentos inseridos`);

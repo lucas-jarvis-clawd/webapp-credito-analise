@@ -1,0 +1,4 @@
+{"level":"info","message":"🚀 Servidor rodando na porta 3001","service":"credito-backend","timestamp":"2026-01-28 03:13:27"}
+{"level":"info","message":"📊 Sistema de análise de crédito iniciado","service":"credito-backend","timestamp":"2026-01-28 03:13:27"}
+{"level":"info","message":"GET /health - ::1","service":"credito-backend","timestamp":"2026-01-28 03:13:31"}
+{"level":"info","message":"POST /api/auth/login - ::1","service":"credito-backend","timestamp":"2026-01-28 03:13:33"}

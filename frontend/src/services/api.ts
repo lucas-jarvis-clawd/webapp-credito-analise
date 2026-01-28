@@ -1,8 +1,8 @@
 import axios from 'axios';
-import { User, Client, CreditAnalysis, MetricConfiguration, DashboardStats, ScoreHistory } from '../types';
+import type { User, Client, CreditAnalysis, MetricConfiguration, DashboardStats, ScoreHistory } from '../types';
 
 const api = axios.create({
-  baseURL: process.env.REACT_APP_API_URL || 'http://localhost:3001/api',
+  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:3001/api',
 });
 
 // Add auth token to requests
