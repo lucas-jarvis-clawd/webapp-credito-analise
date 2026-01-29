@@ -2,8 +2,8 @@ import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import { AppError } from './errorHandler';
 import { User } from '../models/types';
+import { getJwtSecret } from '../utils/jwt';
 
-// Estendendo a interface Request para incluir o usuário
 declare global {
   namespace Express {
     interface Request {
@@ -17,37 +17,37 @@ export const authMiddleware = (req: Request, res: Response, next: NextFunction) 
     const authHeader = req.headers.authorization;
 
     if (!authHeader) {
-      throw new AppError('Token não fornecido', 401);
+      return next(new AppError('Token nao fornecido', 401));
     }
 
     const [, token] = authHeader.split(' ');
 
     if (!token) {
-      throw new AppError('Token mal formatado', 401);
+      return next(new AppError('Token mal formatado', 401));
     }
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'default_secret') as any;
-    
-    // Mock do usuário baseado no token
+    const decoded = jwt.verify(token, getJwtSecret()) as {
+      user: User;
+    };
+
     req.user = decoded.user;
-    
     next();
   } catch (error) {
     if (error instanceof jwt.JsonWebTokenError) {
-      throw new AppError('Token inválido', 401);
+      return next(new AppError('Token invalido', 401));
     }
-    throw error;
+    next(error);
   }
 };
 
 export const requireRole = (roles: string[]) => {
   return (req: Request, res: Response, next: NextFunction) => {
     if (!req.user) {
-      throw new AppError('Usuário não autenticado', 401);
+      return next(new AppError('Usuario nao autenticado', 401));
     }
 
     if (!roles.includes(req.user.perfil)) {
-      throw new AppError('Acesso negado - Perfil insuficiente', 403);
+      return next(new AppError('Acesso negado - Perfil insuficiente', 403));
     }
 
     next();

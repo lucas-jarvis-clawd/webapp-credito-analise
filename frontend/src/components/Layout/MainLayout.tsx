@@ -15,23 +15,21 @@ import {
   Menu,
   MenuItem,
   Divider,
-  Badge,
   Tooltip,
+  Breadcrumbs,
+  Link as MuiLink,
   useTheme,
   useMediaQuery
 } from '@mui/material';
 import {
   Menu as MenuIcon,
   Dashboard,
-  People,
   Settings,
-  Assessment,
   CreditCard,
-  AccountCircle,
   Logout,
-  Notifications,
-  Search,
-  Help
+  AccountBalance,
+  NavigateNext,
+  Home
 } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
@@ -47,25 +45,19 @@ const menuItems = [
     text: 'Dashboard',
     icon: <Dashboard />,
     path: '/dashboard',
-    description: 'Visão geral dos clientes'
+    description: 'Visao geral dos clientes'
   },
   {
-    text: 'Análise de Clientes',
-    icon: <People />,
-    path: '/clients',
-    description: 'Gerenciar clientes'
+    text: 'Gestao de Limites',
+    icon: <AccountBalance />,
+    path: '/limits',
+    description: 'Aprovar e rejeitar limites'
   },
   {
-    text: 'Configurar Métricas',
+    text: 'Configurar Metricas',
     icon: <Settings />,
     path: '/metrics-config',
-    description: 'Configuração de ponderação'
-  },
-  {
-    text: 'Relatórios',
-    icon: <Assessment />,
-    path: '/reports',
-    description: 'Relatórios e estatísticas'
+    description: 'Configuracao de ponderacao'
   }
 ];
 
@@ -100,6 +92,42 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
     return location.pathname === path || location.pathname.startsWith(path + '/');
   };
 
+  const getBreadcrumbs = (): Array<{ label: string; path?: string }> => {
+    const pathname = location.pathname;
+
+    if (pathname === '/dashboard') {
+      return [{ label: 'Dashboard' }];
+    }
+
+    if (pathname === '/limits') {
+      return [{ label: 'Gestao de Limites' }];
+    }
+
+    if (pathname === '/metrics-config') {
+      return [{ label: 'Configuracao de Metricas' }];
+    }
+
+    // /client/:id/credit-limit
+    if (/^\/client\/[^/]+\/credit-limit$/.test(pathname)) {
+      const clientId = pathname.split('/')[2];
+      return [
+        { label: 'Dashboard', path: '/dashboard' },
+        { label: 'Analise do Cliente', path: `/client/${clientId}` },
+        { label: 'Configurar Limite' }
+      ];
+    }
+
+    // /client/:id
+    if (/^\/client\/[^/]+$/.test(pathname)) {
+      return [
+        { label: 'Dashboard', path: '/dashboard' },
+        { label: 'Analise do Cliente' }
+      ];
+    }
+
+    return [];
+  };
+
   const drawer = (
     <Box>
       {/* Logo and Brand */}
@@ -125,14 +153,14 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
       <Box sx={{ p: 2, bgcolor: 'grey.50' }}>
         <Box display="flex" alignItems="center">
           <Avatar sx={{ bgcolor: 'primary.main', mr: 2 }}>
-            {user?.name.charAt(0)}
+            {user?.nome?.charAt(0) || '?'}
           </Avatar>
           <Box flexGrow={1}>
             <Typography variant="subtitle2" fontWeight="bold">
-              {user?.name}
+              {user?.nome}
             </Typography>
             <Typography variant="caption" color="text.secondary">
-              {user?.role === 'admin' ? 'Administrador' : 'Analista'}
+              {user?.perfil === 'ADMIN' ? 'Administrador' : user?.perfil === 'ANALISTA' ? 'Analista' : 'Consultor'}
             </Typography>
           </Box>
         </Box>
@@ -183,34 +211,6 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
         ))}
       </List>
 
-      <Divider />
-
-      {/* Quick Actions */}
-      <Box sx={{ p: 2 }}>
-        <Typography variant="caption" color="text.secondary" sx={{ px: 1, mb: 1, display: 'block' }}>
-          AÇÕES RÁPIDAS
-        </Typography>
-        <List dense>
-          <ListItemButton sx={{ borderRadius: 1, mb: 0.5 }}>
-            <ListItemIcon sx={{ minWidth: 32 }}>
-              <Search fontSize="small" />
-            </ListItemIcon>
-            <ListItemText 
-              primary="Buscar Cliente" 
-              primaryTypographyProps={{ fontSize: 13 }}
-            />
-          </ListItemButton>
-          <ListItemButton sx={{ borderRadius: 1, mb: 0.5 }}>
-            <ListItemIcon sx={{ minWidth: 32 }}>
-              <Help fontSize="small" />
-            </ListItemIcon>
-            <ListItemText 
-              primary="Ajuda" 
-              primaryTypographyProps={{ fontSize: 13 }}
-            />
-          </ListItemButton>
-        </List>
-      </Box>
     </Box>
   );
 
@@ -242,17 +242,9 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
             {location.pathname === '/dashboard' && 'Dashboard'}
             {location.pathname.includes('/client/') && !location.pathname.includes('/credit-limit') && 'Análise do Cliente'}
             {location.pathname.includes('/credit-limit') && 'Configurar Limite'}
+            {location.pathname === '/limits' && 'Gestão de Limites'}
             {location.pathname === '/metrics-config' && 'Configuração de Métricas'}
           </Typography>
-
-          {/* Notifications */}
-          <Tooltip title="Notificações">
-            <IconButton color="inherit" sx={{ mr: 2 }}>
-              <Badge badgeContent={3} color="error">
-                <Notifications />
-              </Badge>
-            </IconButton>
-          </Tooltip>
 
           {/* Profile Menu */}
           <Tooltip title="Perfil do usuário">
@@ -261,7 +253,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
               color="inherit"
             >
               <Avatar sx={{ width: 32, height: 32, bgcolor: 'primary.main' }}>
-                {user?.name.charAt(0)}
+                {user?.nome?.charAt(0) || '?'}
               </Avatar>
             </IconButton>
           </Tooltip>
@@ -294,25 +286,12 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
       >
         <Box sx={{ px: 2, py: 1 }}>
           <Typography variant="subtitle2" fontWeight="bold">
-            {user?.name}
+            {user?.nome}
           </Typography>
           <Typography variant="caption" color="text.secondary">
             {user?.email}
           </Typography>
         </Box>
-        <Divider />
-        <MenuItem onClick={handleMenuClose}>
-          <ListItemIcon>
-            <AccountCircle fontSize="small" />
-          </ListItemIcon>
-          Meu Perfil
-        </MenuItem>
-        <MenuItem onClick={handleMenuClose}>
-          <ListItemIcon>
-            <Settings fontSize="small" />
-          </ListItemIcon>
-          Configurações
-        </MenuItem>
         <Divider />
         <MenuItem onClick={handleLogout}>
           <ListItemIcon>
@@ -371,6 +350,44 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
           pt: 8 // Account for AppBar height
         }}
       >
+        <Box sx={{ px: 3, pt: 2 }}>
+          <Breadcrumbs separator={<NavigateNext fontSize="small" />} aria-label="breadcrumb">
+            <MuiLink
+              underline="hover"
+              color="inherit"
+              sx={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}
+              onClick={() => navigate('/dashboard')}
+            >
+              <Home sx={{ mr: 0.5 }} fontSize="inherit" />
+              Home
+            </MuiLink>
+            {getBreadcrumbs().map((crumb, index, arr) => {
+              const isLast = index === arr.length - 1;
+              if (isLast) {
+                return (
+                  <Typography key={crumb.label} color="text.primary" sx={{ display: 'flex', alignItems: 'center' }}>
+                    {crumb.label}
+                  </Typography>
+                );
+              }
+              return (
+                <MuiLink
+                  key={crumb.label}
+                  underline="hover"
+                  color="inherit"
+                  sx={{ cursor: 'pointer' }}
+                  onClick={() => {
+                    if (crumb.path) {
+                      navigate(crumb.path);
+                    }
+                  }}
+                >
+                  {crumb.label}
+                </MuiLink>
+              );
+            })}
+          </Breadcrumbs>
+        </Box>
         {children}
       </Box>
     </Box>

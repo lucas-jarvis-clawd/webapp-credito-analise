@@ -12,20 +12,22 @@ import {
   Person,
   TrendingUp,
   TrendingDown,
-  AccountBalance,
-  Assessment,
   CheckCircle,
   Cancel,
-  Schedule
+  HourglassEmpty,
+  Assessment
 } from '@mui/icons-material';
-import { DashboardStats } from '../../types';
+import type { DashboardStats } from '../../types';
 
 interface MetricsCardsProps {
   stats: DashboardStats;
 }
 
 const MetricsCards: React.FC<MetricsCardsProps> = ({ stats }) => {
-  const approvalRate = Math.round((stats.monthlyApprovals / (stats.monthlyApprovals + stats.monthlyRejections)) * 100);
+  const totalDecisions = stats.totalApprovedThisMonth + stats.totalRejectedThisMonth;
+  const approvalRate = totalDecisions > 0
+    ? Math.round((stats.totalApprovedThisMonth / totalDecisions) * 100)
+    : 0;
 
   const metrics = [
     {
@@ -33,68 +35,68 @@ const MetricsCards: React.FC<MetricsCardsProps> = ({ stats }) => {
       value: stats.totalClients.toLocaleString(),
       icon: <Person />,
       color: 'primary.main',
-      trend: '+12% este mês'
+      trend: `${stats.activeClients} ativos`
     },
     {
-      title: 'Análises Ativas',
-      value: stats.activeAnalyses,
+      title: 'Clientes Ativos',
+      value: stats.activeClients,
       icon: <Assessment />,
       color: 'info.main',
-      trend: `${stats.activeAnalyses} em andamento`
+      trend: `${stats.totalClients > 0 ? Math.round((stats.activeClients / stats.totalClients) * 100) : 0}% do total`
     },
     {
-      title: 'Score Médio',
+      title: 'Score Medio',
       value: stats.averageScore,
       icon: <TrendingUp />,
       color: 'success.main',
-      trend: '+15 pontos vs. último mês',
-      progress: (stats.averageScore / 850) * 100
+      trend: 'Media geral dos clientes',
+      progress: stats.averageScore
     },
     {
-      title: 'Taxa de Aprovação',
+      title: 'Taxa de Aprovacao',
       value: `${approvalRate}%`,
       icon: <CheckCircle />,
       color: 'success.main',
-      trend: `${stats.monthlyApprovals} aprovações`,
+      trend: `${stats.totalApprovedThisMonth} aprovacoes`,
       progress: approvalRate
     },
     {
-      title: 'Aprovações Este Mês',
-      value: stats.monthlyApprovals,
+      title: 'Aprovados Este Mes',
+      value: stats.totalApprovedThisMonth,
       icon: <CheckCircle />,
       color: 'success.main',
-      trend: 'Meta: 200'
+      trend: 'Limites aprovados'
     },
     {
-      title: 'Rejeições Este Mês',
-      value: stats.monthlyRejections,
+      title: 'Rejeitados Este Mes',
+      value: stats.totalRejectedThisMonth,
       icon: <Cancel />,
       color: 'error.main',
-      trend: 'Redução de 8%'
+      trend: 'Limites rejeitados'
     },
     {
-      title: 'Risco Baixo',
-      value: `${stats.riskDistribution.low}%`,
-      icon: <TrendingUp />,
-      color: 'success.main',
-      trend: 'Clientes baixo risco'
+      title: 'Limites Pendentes',
+      value: stats.totalPendingLimits,
+      icon: <HourglassEmpty />,
+      color: 'warning.main',
+      trend: 'Aguardando aprovacao'
     },
     {
       title: 'Risco Alto',
-      value: `${stats.riskDistribution.high}%`,
+      value: `${(stats.riskDistribution?.['RUIM'] || 0) + (stats.riskDistribution?.['PESSIMO'] || 0)}`,
       icon: <TrendingDown />,
       color: 'error.main',
-      trend: 'Clientes alto risco'
+      trend: 'Clientes RUIM + PESSIMO'
     }
   ];
 
   return (
     <Grid container spacing={3}>
       {metrics.map((metric, index) => (
-        <Grid item xs={12} sm={6} md={3} key={index}>
-          <Card 
+        <Grid size={{ xs: 12, sm: 6, md: 3 }} key={index}>
+          <Card
             elevation={3}
-            sx={{ 
+            sx={{
               height: '100%',
               transition: 'transform 0.2s, box-shadow 0.2s',
               '&:hover': {
@@ -117,12 +119,12 @@ const MetricsCards: React.FC<MetricsCardsProps> = ({ stats }) => {
                   {metric.icon}
                 </Avatar>
               </Box>
-              
+
               {metric.progress && (
                 <Box mb={1}>
                   <LinearProgress
                     variant="determinate"
-                    value={metric.progress}
+                    value={Math.min(metric.progress, 100)}
                     sx={{
                       height: 6,
                       borderRadius: 3,
@@ -135,7 +137,7 @@ const MetricsCards: React.FC<MetricsCardsProps> = ({ stats }) => {
                   />
                 </Box>
               )}
-              
+
               <Typography variant="caption" color="text.secondary">
                 {metric.trend}
               </Typography>

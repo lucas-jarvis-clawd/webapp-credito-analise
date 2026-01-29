@@ -21,16 +21,11 @@ export const useAuth = () => {
   return context;
 };
 
-interface AuthProviderProps {
-  children: ReactNode;
-}
-
-export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
+export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    // Check if user is already logged in
     const token = localStorage.getItem('token');
     if (token) {
       validateToken();
@@ -42,8 +37,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const validateToken = async () => {
     try {
       const response = await authAPI.validateToken();
-      setUser(response.data);
-    } catch (error) {
+      if (response.data.success) {
+        setUser(response.data.user);
+      } else {
+        localStorage.removeItem('token');
+      }
+    } catch {
       localStorage.removeItem('token');
     } finally {
       setIsLoading(false);
@@ -52,35 +51,14 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const login = async (username: string, password: string): Promise<boolean> => {
     try {
-      // Mock authentication - In real app, would call actual API
-      if (username === 'admin' && password === 'admin123') {
-        const mockUser: User = {
-          id: '1',
-          name: 'Lucas Silva',
-          email: 'lucas@empresa.com',
-          role: 'admin'
-        };
-        const mockToken = 'mock-jwt-token-' + Date.now();
-        
-        localStorage.setItem('token', mockToken);
-        setUser(mockUser);
-        return true;
-      } else if (username === 'analyst' && password === 'analyst123') {
-        const mockUser: User = {
-          id: '2',
-          name: 'Ana Costa',
-          email: 'ana@empresa.com',
-          role: 'analyst'
-        };
-        const mockToken = 'mock-jwt-token-' + Date.now();
-        
-        localStorage.setItem('token', mockToken);
-        setUser(mockUser);
+      const response = await authAPI.login({ username, password });
+      if (response.data.success) {
+        localStorage.setItem('token', response.data.token);
+        setUser(response.data.user);
         return true;
       }
       return false;
-    } catch (error) {
-      console.error('Login error:', error);
+    } catch {
       return false;
     }
   };
@@ -90,16 +68,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     setUser(null);
   };
 
-  const value = {
-    user,
-    isLoading,
-    login,
-    logout,
-    isAuthenticated: !!user
-  };
-
   return (
-    <AuthContext.Provider value={value}>
+    <AuthContext.Provider value={{ user, isLoading, login, logout, isAuthenticated: !!user }}>
       {children}
     </AuthContext.Provider>
   );

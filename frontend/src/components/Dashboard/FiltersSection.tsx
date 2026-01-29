@@ -15,21 +15,14 @@ import {
   AccordionSummary,
   AccordionDetails,
   Slider,
-  Switch,
-  FormControlLabel,
   InputAdornment
 } from '@mui/material';
 import {
   Search,
   FilterList,
   Clear,
-  ExpandMore,
-  DateRange,
-  TrendingUp
+  ExpandMore
 } from '@mui/icons-material';
-// import { DatePicker, LocalizationProvider } from '@mui/x-date-pickers';
-// import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
-// import { ptBR } from 'date-fns/locale';
 
 interface FiltersSectionProps {
   onFiltersChange: (filters: FilterState) => void;
@@ -38,36 +31,32 @@ interface FiltersSectionProps {
 
 export interface FilterState {
   searchTerm: string;
-  riskLevel: string;
+  classificacao: string;
   status: string;
   scoreRange: [number, number];
   creditLimitMin: number;
   creditLimitMax: number;
-  dateFrom: Date | null;
-  dateTo: Date | null;
+  tipo: string;
   sortBy: string;
   sortOrder: 'asc' | 'desc';
-  showOnlyRecentAnalysis: boolean;
 }
 
 const FiltersSection: React.FC<FiltersSectionProps> = ({ onFiltersChange, totalResults }) => {
   const [filters, setFilters] = useState<FilterState>({
     searchTerm: '',
-    riskLevel: 'all',
+    classificacao: 'all',
     status: 'all',
-    scoreRange: [300, 850],
+    scoreRange: [0, 100],
     creditLimitMin: 0,
-    creditLimitMax: 100000,
-    dateFrom: null,
-    dateTo: null,
-    sortBy: 'lastAnalysisDate',
-    sortOrder: 'desc',
-    showOnlyRecentAnalysis: false
+    creditLimitMax: 1000000,
+    tipo: 'all',
+    sortBy: 'score_final',
+    sortOrder: 'desc'
   });
 
   const [expanded, setExpanded] = useState(false);
 
-  const handleFilterChange = (key: keyof FilterState, value: any) => {
+  const handleFilterChange = (key: keyof FilterState, value: FilterState[keyof FilterState]) => {
     const newFilters = { ...filters, [key]: value };
     setFilters(newFilters);
     onFiltersChange(newFilters);
@@ -76,16 +65,14 @@ const FiltersSection: React.FC<FiltersSectionProps> = ({ onFiltersChange, totalR
   const handleClearFilters = () => {
     const defaultFilters: FilterState = {
       searchTerm: '',
-      riskLevel: 'all',
+      classificacao: 'all',
       status: 'all',
-      scoreRange: [300, 850],
+      scoreRange: [0, 100],
       creditLimitMin: 0,
-      creditLimitMax: 100000,
-      dateFrom: null,
-      dateTo: null,
-      sortBy: 'lastAnalysisDate',
-      sortOrder: 'desc',
-      showOnlyRecentAnalysis: false
+      creditLimitMax: 1000000,
+      tipo: 'all',
+      sortBy: 'score_final',
+      sortOrder: 'desc'
     };
     setFilters(defaultFilters);
     onFiltersChange(defaultFilters);
@@ -94,21 +81,20 @@ const FiltersSection: React.FC<FiltersSectionProps> = ({ onFiltersChange, totalR
   const getActiveFiltersCount = () => {
     let count = 0;
     if (filters.searchTerm) count++;
-    if (filters.riskLevel !== 'all') count++;
+    if (filters.classificacao !== 'all') count++;
     if (filters.status !== 'all') count++;
-    if (filters.scoreRange[0] !== 300 || filters.scoreRange[1] !== 850) count++;
-    if (filters.creditLimitMin > 0 || filters.creditLimitMax < 100000) count++;
-    if (filters.dateFrom || filters.dateTo) count++;
-    if (filters.showOnlyRecentAnalysis) count++;
+    if (filters.tipo !== 'all') count++;
+    if (filters.scoreRange[0] !== 0 || filters.scoreRange[1] !== 100) count++;
+    if (filters.creditLimitMin > 0 || filters.creditLimitMax < 1000000) count++;
     return count;
   };
 
   return (
     <Paper elevation={3} sx={{ mb: 3 }}>
-      {/* Filtros básicos */}
+      {/* Basic filters */}
       <Box p={3}>
         <Grid container spacing={3} alignItems="center">
-          <Grid item xs={12} md={5}>
+          <Grid size={{ xs: 12, md: 4 }}>
             <TextField
               fullWidth
               size="small"
@@ -124,24 +110,26 @@ const FiltersSection: React.FC<FiltersSectionProps> = ({ onFiltersChange, totalR
               }}
             />
           </Grid>
-          
-          <Grid item xs={6} md={2}>
+
+          <Grid size={{ xs: 6, md: 2 }}>
             <FormControl fullWidth size="small">
-              <InputLabel>Nível de Risco</InputLabel>
+              <InputLabel>Classificacao</InputLabel>
               <Select
-                value={filters.riskLevel}
-                label="Nível de Risco"
-                onChange={(e) => handleFilterChange('riskLevel', e.target.value)}
+                value={filters.classificacao}
+                label="Classificacao"
+                onChange={(e) => handleFilterChange('classificacao', e.target.value)}
               >
-                <MenuItem value="all">Todos</MenuItem>
-                <MenuItem value="low">Baixo</MenuItem>
-                <MenuItem value="medium">Médio</MenuItem>
-                <MenuItem value="high">Alto</MenuItem>
+                <MenuItem value="all">Todas</MenuItem>
+                <MenuItem value="EXCELENTE">Excelente</MenuItem>
+                <MenuItem value="BOM">Bom</MenuItem>
+                <MenuItem value="REGULAR">Regular</MenuItem>
+                <MenuItem value="RUIM">Ruim</MenuItem>
+                <MenuItem value="PESSIMO">Pessimo</MenuItem>
               </Select>
             </FormControl>
           </Grid>
 
-          <Grid item xs={6} md={2}>
+          <Grid size={{ xs: 6, md: 2 }}>
             <FormControl fullWidth size="small">
               <InputLabel>Status</InputLabel>
               <Select
@@ -150,14 +138,14 @@ const FiltersSection: React.FC<FiltersSectionProps> = ({ onFiltersChange, totalR
                 onChange={(e) => handleFilterChange('status', e.target.value)}
               >
                 <MenuItem value="all">Todos</MenuItem>
-                <MenuItem value="active">Ativo</MenuItem>
-                <MenuItem value="pending">Pendente</MenuItem>
-                <MenuItem value="inactive">Inativo</MenuItem>
+                <MenuItem value="ATIVO">Ativo</MenuItem>
+                <MenuItem value="INATIVO">Inativo</MenuItem>
+                <MenuItem value="BLOQUEADO">Bloqueado</MenuItem>
               </Select>
             </FormControl>
           </Grid>
 
-          <Grid item xs={12} md={3}>
+          <Grid size={{ xs: 12, md: 4 }}>
             <Box display="flex" gap={1} alignItems="center">
               <Button
                 variant="outlined"
@@ -166,17 +154,17 @@ const FiltersSection: React.FC<FiltersSectionProps> = ({ onFiltersChange, totalR
                 size="small"
                 sx={{ minWidth: 'auto' }}
               >
-                Filtros Avançados
+                Filtros Avancados
                 {getActiveFiltersCount() > 0 && (
-                  <Chip 
-                    label={getActiveFiltersCount()} 
-                    size="small" 
-                    color="primary" 
+                  <Chip
+                    label={getActiveFiltersCount()}
+                    size="small"
+                    color="primary"
                     sx={{ ml: 1 }}
                   />
                 )}
               </Button>
-              
+
               <Button
                 variant="text"
                 startIcon={<Clear />}
@@ -190,32 +178,32 @@ const FiltersSection: React.FC<FiltersSectionProps> = ({ onFiltersChange, totalR
           </Grid>
         </Grid>
 
-        {/* Resultados */}
+        {/* Results */}
         <Box mt={2} display="flex" alignItems="center" gap={2}>
           <Typography variant="body2" color="text.secondary">
             {totalResults} resultado(s) encontrado(s)
           </Typography>
-          
+
           {getActiveFiltersCount() > 0 && (
             <Box display="flex" gap={1} flexWrap="wrap">
-              {filters.riskLevel !== 'all' && (
-                <Chip 
-                  label={`Risco: ${filters.riskLevel}`}
-                  onDelete={() => handleFilterChange('riskLevel', 'all')}
+              {filters.classificacao !== 'all' && (
+                <Chip
+                  label={`Classe: ${filters.classificacao}`}
+                  onDelete={() => handleFilterChange('classificacao', 'all')}
                   size="small"
                 />
               )}
               {filters.status !== 'all' && (
-                <Chip 
+                <Chip
                   label={`Status: ${filters.status}`}
                   onDelete={() => handleFilterChange('status', 'all')}
                   size="small"
                 />
               )}
-              {filters.showOnlyRecentAnalysis && (
-                <Chip 
-                  label="Análises Recentes"
-                  onDelete={() => handleFilterChange('showOnlyRecentAnalysis', false)}
+              {filters.tipo !== 'all' && (
+                <Chip
+                  label={`Tipo: ${filters.tipo}`}
+                  onDelete={() => handleFilterChange('tipo', 'all')}
                   size="small"
                 />
               )}
@@ -224,29 +212,30 @@ const FiltersSection: React.FC<FiltersSectionProps> = ({ onFiltersChange, totalR
         </Box>
       </Box>
 
-      {/* Filtros avançados */}
+      {/* Advanced filters */}
       <Accordion expanded={expanded} onChange={() => setExpanded(!expanded)}>
         <AccordionSummary expandIcon={<ExpandMore />} sx={{ display: 'none' }}>
         </AccordionSummary>
         <AccordionDetails>
           <Grid container spacing={3}>
-            {/* Faixa de Score */}
-            <Grid item xs={12} md={6}>
+            {/* Score Range */}
+            <Grid size={{ xs: 12, md: 6 }}>
               <Typography gutterBottom variant="subtitle2" fontWeight="bold">
-                Faixa de Score de Crédito
+                Faixa de Score de Credito
               </Typography>
               <Box px={2}>
                 <Slider
                   value={filters.scoreRange}
                   onChange={(_, value) => handleFilterChange('scoreRange', value)}
                   valueLabelDisplay="auto"
-                  min={300}
-                  max={850}
+                  min={0}
+                  max={100}
                   marks={[
-                    { value: 300, label: '300' },
-                    { value: 500, label: '500' },
-                    { value: 700, label: '700' },
-                    { value: 850, label: '850' }
+                    { value: 0, label: '0' },
+                    { value: 25, label: '25' },
+                    { value: 50, label: '50' },
+                    { value: 75, label: '75' },
+                    { value: 100, label: '100' }
                   ]}
                 />
               </Box>
@@ -260,14 +249,14 @@ const FiltersSection: React.FC<FiltersSectionProps> = ({ onFiltersChange, totalR
               </Box>
             </Grid>
 
-            {/* Limite de Crédito */}
-            <Grid item xs={12} md={6}>
+            {/* Credit Limit */}
+            <Grid size={{ xs: 12, md: 6 }}>
               <Typography gutterBottom variant="subtitle2" fontWeight="bold">
-                Limite de Crédito
+                Limite de Credito
               </Typography>
               <Box display="flex" gap={2}>
                 <TextField
-                  label="Mínimo"
+                  label="Minimo"
                   type="number"
                   size="small"
                   value={filters.creditLimitMin}
@@ -277,7 +266,7 @@ const FiltersSection: React.FC<FiltersSectionProps> = ({ onFiltersChange, totalR
                   }}
                 />
                 <TextField
-                  label="Máximo"
+                  label="Maximo"
                   type="number"
                   size="small"
                   value={filters.creditLimitMax}
@@ -289,39 +278,28 @@ const FiltersSection: React.FC<FiltersSectionProps> = ({ onFiltersChange, totalR
               </Box>
             </Grid>
 
-            {/* Período */}
-            <Grid item xs={12} md={6}>
+            {/* Type and Sort */}
+            <Grid size={{ xs: 12, md: 6 }}>
               <Typography gutterBottom variant="subtitle2" fontWeight="bold">
-                Período da Análise
+                Tipo de Cliente
               </Typography>
-              <Box display="flex" gap={2}>
-                <TextField
-                  label="De"
-                  type="date"
-                  size="small"
-                  value={filters.dateFrom ? filters.dateFrom.toISOString().split('T')[0] : ''}
-                  onChange={(e) => handleFilterChange('dateFrom', e.target.value ? new Date(e.target.value) : null)}
-                  InputLabelProps={{
-                    shrink: true,
-                  }}
-                />
-                <TextField
-                  label="Até"
-                  type="date"
-                  size="small"
-                  value={filters.dateTo ? filters.dateTo.toISOString().split('T')[0] : ''}
-                  onChange={(e) => handleFilterChange('dateTo', e.target.value ? new Date(e.target.value) : null)}
-                  InputLabelProps={{
-                    shrink: true,
-                  }}
-                />
-              </Box>
+              <FormControl size="small" sx={{ minWidth: 150 }}>
+                <InputLabel>Tipo</InputLabel>
+                <Select
+                  value={filters.tipo}
+                  label="Tipo"
+                  onChange={(e) => handleFilterChange('tipo', e.target.value)}
+                >
+                  <MenuItem value="all">Todos</MenuItem>
+                  <MenuItem value="PF">Pessoa Fisica</MenuItem>
+                  <MenuItem value="PJ">Pessoa Juridica</MenuItem>
+                </Select>
+              </FormControl>
             </Grid>
 
-            {/* Ordenação */}
-            <Grid item xs={12} md={6}>
+            <Grid size={{ xs: 12, md: 6 }}>
               <Typography gutterBottom variant="subtitle2" fontWeight="bold">
-                Ordenação
+                Ordenacao
               </Typography>
               <Box display="flex" gap={2}>
                 <FormControl size="small" sx={{ minWidth: 150 }}>
@@ -331,13 +309,13 @@ const FiltersSection: React.FC<FiltersSectionProps> = ({ onFiltersChange, totalR
                     label="Ordenar por"
                     onChange={(e) => handleFilterChange('sortBy', e.target.value)}
                   >
-                    <MenuItem value="name">Nome</MenuItem>
-                    <MenuItem value="creditScore">Score</MenuItem>
-                    <MenuItem value="creditLimit">Limite</MenuItem>
-                    <MenuItem value="lastAnalysisDate">Data da Análise</MenuItem>
+                    <MenuItem value="nome">Nome</MenuItem>
+                    <MenuItem value="score_final">Score</MenuItem>
+                    <MenuItem value="limite_credito">Limite</MenuItem>
+                    <MenuItem value="created_at">Data de Cadastro</MenuItem>
                   </Select>
                 </FormControl>
-                
+
                 <FormControl size="small">
                   <InputLabel>Ordem</InputLabel>
                   <Select
@@ -350,22 +328,6 @@ const FiltersSection: React.FC<FiltersSectionProps> = ({ onFiltersChange, totalR
                   </Select>
                 </FormControl>
               </Box>
-            </Grid>
-
-            {/* Opções adicionais */}
-            <Grid item xs={12}>
-              <Typography gutterBottom variant="subtitle2" fontWeight="bold">
-                Opções Adicionais
-              </Typography>
-              <FormControlLabel
-                control={
-                  <Switch
-                    checked={filters.showOnlyRecentAnalysis}
-                    onChange={(e) => handleFilterChange('showOnlyRecentAnalysis', e.target.checked)}
-                  />
-                }
-                label="Mostrar apenas análises dos últimos 30 dias"
-              />
             </Grid>
           </Grid>
         </AccordionDetails>

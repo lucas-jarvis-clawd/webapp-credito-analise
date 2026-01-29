@@ -1,71 +1,108 @@
-// Types for the Credit Analysis System
+// Types for the Credit Analysis System - aligned with backend API
 
 export interface User {
-  id: string;
-  name: string;
+  id: number;
+  username: string;
   email: string;
-  role: 'admin' | 'analyst';
+  nome: string;
+  perfil: 'ADMIN' | 'ANALISTA' | 'CONSULTOR';
 }
 
 export interface Client {
-  id: string;
-  name: string;
-  document: string;
-  email: string;
-  phone: string;
-  creditScore: number;
-  riskLevel: 'low' | 'medium' | 'high';
-  creditLimit: number;
-  lastAnalysisDate: Date;
-  status: 'active' | 'inactive' | 'pending';
-  totalDebt: number;
-  monthlyIncome: number;
+  id: number;
+  nome: string;
+  cpf_cnpj: string;
+  tipo: 'PF' | 'PJ';
+  email?: string;
+  telefone?: string;
+  endereco?: string;
+  limite_credito: number;
+  status: 'ATIVO' | 'INATIVO' | 'BLOQUEADO';
+  segmento_textil?: string;
+  tipo_negocio?: string;
+  faturamento_estimado?: number;
+  created_at: string;
+  updated_at: string;
+  // These may come from dashboard endpoint
+  score_final?: number;
+  classificacao?: 'EXCELENTE' | 'BOM' | 'REGULAR' | 'RUIM' | 'PESSIMO';
+}
+
+export interface ScoreMetrics {
+  historico_pagamentos: number;
+  tempo_relacionamento: number;
+  tendencia_volume: number;
+  prazo_medio_pagamento: number;
+  indice_sazonalidade: number;
+  referencia_comercial: number;
+  capacidade_estimada: number;
+}
+
+export interface ScoreWeights {
+  historico_pagamentos: number;
+  tempo_relacionamento: number;
+  tendencia_volume: number;
+  prazo_medio_pagamento: number;
+  indice_sazonalidade: number;
+  referencia_comercial: number;
+  capacidade_estimada: number;
+}
+
+export interface ScoreResult {
+  cliente_id: number;
+  score_final: number;
+  metricas: ScoreMetrics;
+  ponderacoes: ScoreWeights;
+  classificacao: 'EXCELENTE' | 'BOM' | 'REGULAR' | 'RUIM' | 'PESSIMO';
+  data_calculo: string;
+  confiabilidade?: {
+    nivel: 'ALTO' | 'MEDIO' | 'BAIXO' | 'INSUFICIENTE';
+    score: number;
+    fatores: {
+      qtd_duplicatas: number;
+      qtd_pagamentos: number;
+      qtd_referencias: number;
+      meses_historico: number;
+    };
+  };
 }
 
 export interface ScoreHistory {
-  date: Date;
+  date: string;
   score: number;
-  reason: string;
+  classificacao: 'EXCELENTE' | 'BOM' | 'REGULAR' | 'RUIM' | 'PESSIMO';
 }
 
-export interface Metric {
-  id: string;
-  name: string;
-  weight: number;
-  value: number;
-  description: string;
-  category: 'financial' | 'behavioral' | 'demographic';
+export interface LimiteCredito {
+  id: number;
+  cliente_id: number;
+  limite_atual?: number;
+  limite_solicitado?: number;
+  limite_aprovado?: number;
+  data_aprovacao?: string;
+  aprovado_por?: string;
+  motivo?: string;
+  status: 'ATIVO' | 'PENDENTE' | 'REJEITADO';
+  created_at: string;
+  updated_at: string;
 }
 
-export interface CreditAnalysis {
-  clientId: string;
-  finalScore: number;
-  metrics: Metric[];
-  recommendations: string[];
-  riskFactors: string[];
-  creditLimit: number;
-  approvalStatus: 'approved' | 'rejected' | 'under_review';
-  analysisDate: Date;
-  analystId: string;
+export interface DashboardStats {
+  totalClients: number;
+  activeClients: number;
+  averageScore: number;
+  riskDistribution: Record<string, number>;
+  totalPendingLimits: number;
+  totalApprovedThisMonth: number;
+  totalRejectedThisMonth: number;
+  clients: Client[];
 }
 
 export interface MetricConfiguration {
   id: string;
   name: string;
+  key: string;
   weight: number;
   isActive: boolean;
-  formula: string;
-}
-
-export interface DashboardStats {
-  totalClients: number;
-  activeAnalyses: number;
-  averageScore: number;
-  riskDistribution: {
-    low: number;
-    medium: number;
-    high: number;
-  };
-  monthlyApprovals: number;
-  monthlyRejections: number;
+  description: string;
 }

@@ -8,10 +8,6 @@ import {
   Box,
   TextField,
   Button,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
   Alert,
   Stepper,
   Step,
@@ -20,117 +16,95 @@ import {
   Divider,
   Chip,
   Avatar,
-  List,
-  ListItem,
-  ListItemIcon,
-  ListItemText,
   Dialog,
   DialogTitle,
   DialogContent,
   DialogActions,
-  Slider,
-  InputAdornment
+  InputAdornment,
+  CircularProgress
 } from '@mui/material';
 import {
-  Person,
   Assessment,
   MonetizationOn,
   CheckCircle,
-  Warning,
-  Error,
   TrendingUp,
   AccountBalance,
-  Calculate,
   Save,
   Cancel,
-  Info
+  Info,
+  ArrowBack,
+  Refresh
 } from '@mui/icons-material';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Client } from '../../types';
+import type { Client, ScoreResult } from '../../types';
+import { clientsAPI, scoreAPI, limitsAPI } from '../../services/api';
 
 const steps = [
   'Dados do Cliente',
-  'Análise de Risco',
-  'Configuração do Limite',
-  'Confirmação'
+  'Analise de Score',
+  'Solicitar Limite',
+  'Confirmacao'
 ];
-
-// Mock client data
-const mockClient: Client = {
-  id: '1',
-  name: 'João Silva',
-  document: '123.456.789-01',
-  email: 'joao@email.com',
-  phone: '(11) 99999-1111',
-  creditScore: 780,
-  riskLevel: 'low',
-  creditLimit: 15000,
-  lastAnalysisDate: new Date('2024-01-20'),
-  status: 'active',
-  totalDebt: 2500,
-  monthlyIncome: 8000
-};
-
-interface CreditLimitRequest {
-  clientId: string;
-  requestedLimit: number;
-  reason: string;
-  justification: string;
-  analysisType: 'automatic' | 'manual' | 'hybrid';
-  urgency: 'low' | 'medium' | 'high';
-  validUntil: Date;
-}
 
 const CreditLimitForm: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const [client] = useState<Client>(mockClient);
+  const clientId = id ? parseInt(id, 10) : 0;
+
+  const [client, setClient] = useState<Client | null>(null);
+  const [scoreResult, setScoreResult] = useState<ScoreResult | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [activeStep, setActiveStep] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
+  const [submitSuccess, setSubmitSuccess] = useState(false);
 
-  const [formData, setFormData] = useState<CreditLimitRequest>({
-    clientId: id || '',
-    requestedLimit: client.creditLimit,
-    reason: '',
-    justification: '',
-    analysisType: 'automatic',
-    urgency: 'medium',
-    validUntil: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) // 30 days from now
-  });
-
-  const [riskAnalysis, setRiskAnalysis] = useState({
-    debtToIncomeRatio: (client.totalDebt / client.monthlyIncome) * 100,
-    creditUtilization: (client.totalDebt / client.creditLimit) * 100,
-    recommendedLimit: 0,
-    riskFactors: [] as string[],
-    approvalProbability: 85
+  const [formData, setFormData] = useState({
+    limiteSolicitado: 0,
+    motivo: ''
   });
 
   useEffect(() => {
-    // Calculate recommended limit based on score and income
-    const baseLimit = client.monthlyIncome * 3; // 3x monthly income
-    const scoreMultiplier = client.creditScore / 850; // Score factor
-    const recommended = Math.round(baseLimit * scoreMultiplier);
-    
-    const factors: string[] = [];
-    
-    if (riskAnalysis.debtToIncomeRatio > 40) {
-      factors.push('Alta relação dívida/renda');
-    }
-    if (riskAnalysis.creditUtilization > 80) {
-      factors.push('Alta utilização de crédito atual');
-    }
-    if (client.creditScore < 600) {
-      factors.push('Score de crédito baixo');
+    loadData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clientId]);
+
+  const loadData = async () => {
+    if (!clientId) {
+      setError('ID do cliente invalido.');
+      setIsLoading(false);
+      return;
     }
 
-    setRiskAnalysis(prev => ({
-      ...prev,
-      recommendedLimit: recommended,
-      riskFactors: factors
-    }));
-  }, [client, riskAnalysis.debtToIncomeRatio, riskAnalysis.creditUtilization]);
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const clientResponse = await clientsAPI.getById(clientId);
+      if (clientResponse.data.success) {
+        setClient(clientResponse.data.data);
+        setFormData(prev => ({
+          ...prev,
+          limiteSolicitado: clientResponse.data.data.limite_credito
+        }));
+      }
+
+      try {
+        const scoreResponse = await scoreAPI.getLatest(clientId);
+        if (scoreResponse.data.success) {
+          setScoreResult(scoreResponse.data.data);
+        }
+      } catch {
+        // Score not calculated yet
+      }
+    } catch (err: unknown) {
+      const axiosErr = err as { response?: { data?: { message?: string } } };
+      setError(axiosErr.response?.data?.message || 'Erro ao carregar dados do cliente.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const handleNext = () => {
     if (activeStep < steps.length - 1) {
@@ -146,111 +120,155 @@ const CreditLimitForm: React.FC = () => {
 
   const handleSubmit = async () => {
     setIsSubmitting(true);
-    
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 2000));
-    
-    console.log('Submitting credit limit request:', formData);
-    
-    setIsSubmitting(false);
-    setShowConfirmDialog(false);
-    navigate(`/client/${client.id}`);
+    setError(null);
+
+    try {
+      const response = await limitsAPI.request({
+        cliente_id: clientId,
+        limite_solicitado: formData.limiteSolicitado,
+        motivo: formData.motivo
+      });
+
+      if (response.data.success) {
+        setSubmitSuccess(true);
+        setShowConfirmDialog(false);
+        setTimeout(() => {
+          navigate(`/client/${clientId}`);
+        }, 2000);
+      } else {
+        setError('Falha ao enviar solicitacao.');
+      }
+    } catch (err: unknown) {
+      const axiosErr = err as { response?: { data?: { message?: string } } };
+      setError(axiosErr.response?.data?.message || 'Erro ao enviar solicitacao de limite.');
+    } finally {
+      setIsSubmitting(false);
+      setShowConfirmDialog(false);
+    }
   };
 
-  const getRiskColor = (level: string) => {
-    switch (level) {
-      case 'low': return 'success';
-      case 'medium': return 'warning';
-      case 'high': return 'error';
+  const getClassificacaoColor = (classificacao?: string): 'success' | 'info' | 'warning' | 'error' | 'default' => {
+    switch (classificacao) {
+      case 'EXCELENTE': return 'success';
+      case 'BOM': return 'info';
+      case 'REGULAR': return 'warning';
+      case 'RUIM': return 'error';
+      case 'PESSIMO': return 'error';
       default: return 'default';
     }
   };
 
-  const getLimitRecommendation = () => {
-    const requested = formData.requestedLimit;
-    const recommended = riskAnalysis.recommendedLimit;
-    
-    if (requested <= recommended * 0.8) {
-      return { type: 'success', message: 'Limite conservador e seguro' };
-    } else if (requested <= recommended) {
-      return { type: 'info', message: 'Limite dentro do recomendado' };
-    } else if (requested <= recommended * 1.2) {
-      return { type: 'warning', message: 'Limite ligeiramente acima do recomendado' };
-    } else {
-      return { type: 'error', message: 'Limite muito acima do recomendado' };
-    }
-  };
+  if (isLoading) {
+    return (
+      <Container maxWidth="xl" sx={{ py: 3 }}>
+        <Box display="flex" flexDirection="column" alignItems="center" justifyContent="center" minHeight="60vh">
+          <CircularProgress size={60} />
+          <Typography variant="h6" color="text.secondary" mt={3}>
+            Carregando dados do cliente...
+          </Typography>
+        </Box>
+      </Container>
+    );
+  }
+
+  if (error && !client) {
+    return (
+      <Container maxWidth="xl" sx={{ py: 3 }}>
+        <Box display="flex" flexDirection="column" alignItems="center" justifyContent="center" minHeight="60vh">
+          <Alert severity="error" sx={{ mb: 3, maxWidth: 600 }}>
+            {error}
+          </Alert>
+          <Box display="flex" gap={2}>
+            <Button variant="outlined" startIcon={<ArrowBack />} onClick={() => navigate(-1)}>
+              Voltar
+            </Button>
+            <Button variant="contained" startIcon={<Refresh />} onClick={loadData}>
+              Tentar Novamente
+            </Button>
+          </Box>
+        </Box>
+      </Container>
+    );
+  }
+
+  if (!client) return null;
 
   const renderStepContent = (step: number) => {
     switch (step) {
       case 0:
         return (
           <Grid container spacing={3}>
-            <Grid item xs={12} md={4}>
+            <Grid size={{ xs: 12, md: 4 }}>
               <Paper elevation={2} sx={{ p: 3, textAlign: 'center' }}>
                 <Avatar sx={{ width: 80, height: 80, fontSize: 32, bgcolor: 'primary.main', mx: 'auto', mb: 2 }}>
-                  {client.name.charAt(0)}
+                  {client.nome.charAt(0)}
                 </Avatar>
                 <Typography variant="h6" fontWeight="bold">
-                  {client.name}
+                  {client.nome}
                 </Typography>
                 <Typography variant="body2" color="text.secondary">
-                  {client.document}
+                  {client.cpf_cnpj}
                 </Typography>
                 <Chip
                   label={client.status}
-                  color={client.status === 'active' ? 'success' : 'warning'}
+                  color={client.status === 'ATIVO' ? 'success' : 'warning'}
                   sx={{ mt: 1 }}
+                />
+                <Chip
+                  label={client.tipo}
+                  variant="outlined"
+                  size="small"
+                  sx={{ mt: 1, ml: 1 }}
                 />
               </Paper>
             </Grid>
-            
-            <Grid item xs={12} md={8}>
+
+            <Grid size={{ xs: 12, md: 8 }}>
               <Grid container spacing={2}>
-                <Grid item xs={12} sm={6}>
+                <Grid size={{ xs: 12, sm: 6 }}>
                   <Paper elevation={2} sx={{ p: 2 }}>
                     <Box display="flex" alignItems="center" mb={1}>
                       <TrendingUp sx={{ mr: 1, color: 'primary.main' }} />
-                      <Typography variant="subtitle2">Score de Crédito</Typography>
+                      <Typography variant="subtitle2">Score de Credito</Typography>
                     </Box>
                     <Typography variant="h5" fontWeight="bold" color="primary.main">
-                      {client.creditScore}
+                      {scoreResult ? scoreResult.score_final : 'Nao calculado'}
                     </Typography>
                   </Paper>
                 </Grid>
-                
-                <Grid item xs={12} sm={6}>
+
+                <Grid size={{ xs: 12, sm: 6 }}>
                   <Paper elevation={2} sx={{ p: 2 }}>
                     <Box display="flex" alignItems="center" mb={1}>
-                      <MonetizationOn sx={{ mr: 1, color: 'success.main' }} />
-                      <Typography variant="subtitle2">Renda Mensal</Typography>
+                      <Assessment sx={{ mr: 1, color: 'info.main' }} />
+                      <Typography variant="subtitle2">Classificacao</Typography>
                     </Box>
-                    <Typography variant="h5" fontWeight="bold" color="success.main">
-                      R$ {client.monthlyIncome.toLocaleString()}
+                    <Typography variant="h5" fontWeight="bold" color="info.main">
+                      {scoreResult ? `${scoreResult.classificacao}` : '-'}
                     </Typography>
                   </Paper>
                 </Grid>
-                
-                <Grid item xs={12} sm={6}>
+
+                <Grid size={{ xs: 12, sm: 6 }}>
                   <Paper elevation={2} sx={{ p: 2 }}>
                     <Box display="flex" alignItems="center" mb={1}>
                       <AccountBalance sx={{ mr: 1, color: 'info.main' }} />
                       <Typography variant="subtitle2">Limite Atual</Typography>
                     </Box>
                     <Typography variant="h5" fontWeight="bold" color="info.main">
-                      R$ {client.creditLimit.toLocaleString()}
+                      R$ {client.limite_credito.toLocaleString()}
                     </Typography>
                   </Paper>
                 </Grid>
-                
-                <Grid item xs={12} sm={6}>
+
+                <Grid size={{ xs: 12, sm: 6 }}>
                   <Paper elevation={2} sx={{ p: 2 }}>
                     <Box display="flex" alignItems="center" mb={1}>
-                      <Error sx={{ mr: 1, color: 'error.main' }} />
-                      <Typography variant="subtitle2">Dívida Total</Typography>
+                      <MonetizationOn sx={{ mr: 1, color: 'success.main' }} />
+                      <Typography variant="subtitle2">Faturamento Estimado</Typography>
                     </Box>
-                    <Typography variant="h5" fontWeight="bold" color="error.main">
-                      R$ {client.totalDebt.toLocaleString()}
+                    <Typography variant="h5" fontWeight="bold" color="success.main">
+                      {client.faturamento_estimado ? `R$ ${client.faturamento_estimado.toLocaleString()}` : '-'}
                     </Typography>
                   </Paper>
                 </Grid>
@@ -262,117 +280,89 @@ const CreditLimitForm: React.FC = () => {
       case 1:
         return (
           <Grid container spacing={3}>
-            <Grid item xs={12} md={6}>
+            <Grid size={{ xs: 12, md: 6 }}>
               <Card elevation={2}>
                 <CardContent>
                   <Typography variant="h6" gutterBottom>
                     <Assessment sx={{ mr: 1, verticalAlign: 'middle' }} />
-                    Análise de Risco
+                    Analise de Score
                   </Typography>
-                  
-                  <Box mb={3}>
-                    <Typography variant="subtitle2" gutterBottom>
-                      Relação Dívida/Renda: {riskAnalysis.debtToIncomeRatio.toFixed(1)}%
-                    </Typography>
-                    <Box sx={{ width: '100%', mr: 1 }}>
-                      <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                        <Box sx={{ width: '100%', mr: 1 }}>
-                          <Slider
-                            value={riskAnalysis.debtToIncomeRatio}
-                            max={100}
-                            disabled
-                            sx={{
-                              '& .MuiSlider-thumb': {
-                                color: riskAnalysis.debtToIncomeRatio > 40 ? 'error.main' : 'success.main'
-                              },
-                              '& .MuiSlider-track': {
-                                color: riskAnalysis.debtToIncomeRatio > 40 ? 'error.main' : 'success.main'
-                              }
-                            }}
-                          />
-                        </Box>
+
+                  {scoreResult ? (
+                    <>
+                      <Box textAlign="center" mb={3}>
+                        <Typography variant="h3" fontWeight="bold" color="primary.main">
+                          {scoreResult.score_final}
+                        </Typography>
+                        <Typography variant="subtitle1" color="text.secondary">
+                          Score Final
+                        </Typography>
+                        <Chip
+                          label={`${scoreResult.classificacao}`}
+                          color={getClassificacaoColor(scoreResult.classificacao)}
+                          sx={{ mt: 1, fontWeight: 'bold' }}
+                        />
                       </Box>
-                    </Box>
-                  </Box>
 
-                  <Box mb={3}>
-                    <Typography variant="subtitle2" gutterBottom>
-                      Utilização de Crédito: {riskAnalysis.creditUtilization.toFixed(1)}%
-                    </Typography>
-                    <Slider
-                      value={riskAnalysis.creditUtilization}
-                      max={100}
-                      disabled
-                      sx={{
-                        '& .MuiSlider-thumb': {
-                          color: riskAnalysis.creditUtilization > 80 ? 'error.main' : 'success.main'
-                        },
-                        '& .MuiSlider-track': {
-                          color: riskAnalysis.creditUtilization > 80 ? 'error.main' : 'success.main'
-                        }
-                      }}
-                    />
-                  </Box>
+                      <Divider sx={{ my: 2 }} />
 
-                  <Divider sx={{ my: 2 }} />
-
-                  <Box textAlign="center">
-                    <Typography variant="subtitle2" color="text.secondary">
-                      Probabilidade de Aprovação
-                    </Typography>
-                    <Typography variant="h3" fontWeight="bold" color="success.main">
-                      {riskAnalysis.approvalProbability}%
-                    </Typography>
-                  </Box>
+                      <Typography variant="subtitle2" gutterBottom>
+                        Metricas do Score
+                      </Typography>
+                      {Object.entries(scoreResult.metricas).map(([key, value]) => (
+                        <Box key={key} display="flex" justifyContent="space-between" mb={1}>
+                          <Typography variant="body2" color="text.secondary">
+                            {key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                          </Typography>
+                          <Typography variant="body2" fontWeight="bold">
+                            {Math.round(value * 100) / 100}
+                          </Typography>
+                        </Box>
+                      ))}
+                    </>
+                  ) : (
+                    <Alert severity="info">
+                      Score ainda nao calculado para este cliente.
+                    </Alert>
+                  )}
                 </CardContent>
               </Card>
             </Grid>
 
-            <Grid item xs={12} md={6}>
+            <Grid size={{ xs: 12, md: 6 }}>
               <Card elevation={2}>
                 <CardContent>
                   <Typography variant="h6" gutterBottom>
-                    <Calculate sx={{ mr: 1, verticalAlign: 'middle' }} />
-                    Limite Recomendado
+                    <Info sx={{ mr: 1, verticalAlign: 'middle' }} />
+                    Informacoes do Cliente
                   </Typography>
-                  
-                  <Box textAlign="center" mb={3}>
-                    <Typography variant="h4" fontWeight="bold" color="primary.main">
-                      R$ {riskAnalysis.recommendedLimit.toLocaleString()}
-                    </Typography>
-                    <Typography variant="caption" color="text.secondary">
-                      Baseado em renda e score
+
+                  <Box mb={2}>
+                    <Typography variant="body2" color="text.secondary">Limite Atual</Typography>
+                    <Typography variant="h5" fontWeight="bold">
+                      R$ {client.limite_credito.toLocaleString()}
                     </Typography>
                   </Box>
 
-                  <Divider sx={{ my: 2 }} />
+                  {client.segmento_textil && (
+                    <Box mb={2}>
+                      <Typography variant="body2" color="text.secondary">Segmento Textil</Typography>
+                      <Typography variant="body1">{client.segmento_textil}</Typography>
+                    </Box>
+                  )}
 
-                  {riskAnalysis.riskFactors.length > 0 ? (
-                    <>
-                      <Typography variant="subtitle2" color="warning.main" gutterBottom>
-                        <Warning sx={{ mr: 1, verticalAlign: 'middle', fontSize: 20 }} />
-                        Fatores de Atenção
-                      </Typography>
-                      <List dense>
-                        {riskAnalysis.riskFactors.map((factor, index) => (
-                          <ListItem key={index}>
-                            <ListItemIcon>
-                              <Warning color="warning" fontSize="small" />
-                            </ListItemIcon>
-                            <ListItemText 
-                              primary={factor}
-                              primaryTypographyProps={{ variant: 'body2' }}
-                            />
-                          </ListItem>
-                        ))}
-                      </List>
-                    </>
-                  ) : (
-                    <Alert severity="success">
-                      <Typography variant="body2">
-                        Perfil de baixo risco. Cliente elegível para limites elevados.
-                      </Typography>
-                    </Alert>
+                  {client.tipo_negocio && (
+                    <Box mb={2}>
+                      <Typography variant="body2" color="text.secondary">Tipo de Negocio</Typography>
+                      <Typography variant="body1">{client.tipo_negocio}</Typography>
+                    </Box>
+                  )}
+
+                  {client.faturamento_estimado && (
+                    <Box mb={2}>
+                      <Typography variant="body2" color="text.secondary">Faturamento Estimado</Typography>
+                      <Typography variant="body1">R$ {client.faturamento_estimado.toLocaleString()}</Typography>
+                    </Box>
                   )}
                 </CardContent>
               </Card>
@@ -381,102 +371,44 @@ const CreditLimitForm: React.FC = () => {
         );
 
       case 2:
-        const limitRec = getLimitRecommendation();
         return (
           <Grid container spacing={3}>
-            <Grid item xs={12} md={8}>
+            <Grid size={{ xs: 12, md: 8 }}>
               <Card elevation={2}>
                 <CardContent>
                   <Typography variant="h6" gutterBottom>
-                    Configuração do Limite de Crédito
+                    Solicitacao de Limite de Credito
                   </Typography>
 
                   <Grid container spacing={3}>
-                    <Grid item xs={12} sm={6}>
+                    <Grid size={{ xs: 12, sm: 6 }}>
                       <TextField
                         fullWidth
                         label="Limite Solicitado"
                         type="number"
-                        value={formData.requestedLimit}
-                        onChange={(e) => setFormData(prev => ({ ...prev, requestedLimit: Number(e.target.value) }))}
+                        value={formData.limiteSolicitado}
+                        onChange={(e) => setFormData(prev => ({ ...prev, limiteSolicitado: Number(e.target.value) }))}
                         InputProps={{
                           startAdornment: <InputAdornment position="start">R$</InputAdornment>,
                         }}
                       />
-                      <Alert severity={limitRec.type as any} sx={{ mt: 1 }}>
-                        {limitRec.message}
-                      </Alert>
+                      {formData.limiteSolicitado > client.limite_credito && (
+                        <Alert severity="info" sx={{ mt: 1 }}>
+                          Aumento de R$ {(formData.limiteSolicitado - client.limite_credito).toLocaleString()} solicitado
+                        </Alert>
+                      )}
                     </Grid>
 
-                    <Grid item xs={12} sm={6}>
-                      <FormControl fullWidth>
-                        <InputLabel>Tipo de Análise</InputLabel>
-                        <Select
-                          value={formData.analysisType}
-                          label="Tipo de Análise"
-                          onChange={(e) => setFormData(prev => ({ ...prev, analysisType: e.target.value as any }))}
-                        >
-                          <MenuItem value="automatic">Automática</MenuItem>
-                          <MenuItem value="manual">Manual</MenuItem>
-                          <MenuItem value="hybrid">Híbrida</MenuItem>
-                        </Select>
-                      </FormControl>
-                    </Grid>
-
-                    <Grid item xs={12} sm={6}>
-                      <FormControl fullWidth>
-                        <InputLabel>Urgência</InputLabel>
-                        <Select
-                          value={formData.urgency}
-                          label="Urgência"
-                          onChange={(e) => setFormData(prev => ({ ...prev, urgency: e.target.value as any }))}
-                        >
-                          <MenuItem value="low">Baixa</MenuItem>
-                          <MenuItem value="medium">Média</MenuItem>
-                          <MenuItem value="high">Alta</MenuItem>
-                        </Select>
-                      </FormControl>
-                    </Grid>
-
-                    <Grid item xs={12} sm={6}>
+                    <Grid size={12}>
                       <TextField
                         fullWidth
-                        label="Válido Até"
-                        type="date"
-                        value={formData.validUntil.toISOString().split('T')[0]}
-                        onChange={(e) => setFormData(prev => ({ ...prev, validUntil: new Date(e.target.value) }))}
-                        InputLabelProps={{ shrink: true }}
-                      />
-                    </Grid>
-
-                    <Grid item xs={12}>
-                      <FormControl fullWidth>
-                        <InputLabel>Motivo da Solicitação</InputLabel>
-                        <Select
-                          value={formData.reason}
-                          label="Motivo da Solicitação"
-                          onChange={(e) => setFormData(prev => ({ ...prev, reason: e.target.value }))}
-                        >
-                          <MenuItem value="increase_income">Aumento de renda</MenuItem>
-                          <MenuItem value="score_improvement">Melhoria do score</MenuItem>
-                          <MenuItem value="relationship_time">Tempo de relacionamento</MenuItem>
-                          <MenuItem value="payment_history">Histórico de pagamento</MenuItem>
-                          <MenuItem value="special_campaign">Campanha especial</MenuItem>
-                          <MenuItem value="competitor_offer">Oferta da concorrência</MenuItem>
-                          <MenuItem value="other">Outro</MenuItem>
-                        </Select>
-                      </FormControl>
-                    </Grid>
-
-                    <Grid item xs={12}>
-                      <TextField
-                        fullWidth
-                        label="Justificativa Detalhada"
+                        label="Motivo da Solicitacao"
                         multiline
                         rows={4}
-                        value={formData.justification}
-                        onChange={(e) => setFormData(prev => ({ ...prev, justification: e.target.value }))}
-                        placeholder="Descreva os motivos técnicos e comerciais para esta solicitação..."
+                        value={formData.motivo}
+                        onChange={(e) => setFormData(prev => ({ ...prev, motivo: e.target.value }))}
+                        placeholder="Descreva os motivos para esta solicitacao de limite de credito..."
+                        required
                       />
                     </Grid>
                   </Grid>
@@ -484,29 +416,20 @@ const CreditLimitForm: React.FC = () => {
               </Card>
             </Grid>
 
-            <Grid item xs={12} md={4}>
+            <Grid size={{ xs: 12, md: 4 }}>
               <Card elevation={2}>
                 <CardContent>
                   <Typography variant="h6" gutterBottom>
                     <Info sx={{ mr: 1, verticalAlign: 'middle' }} />
-                    Resumo da Análise
+                    Resumo
                   </Typography>
-                  
+
                   <Box mb={2}>
                     <Typography variant="caption" color="text.secondary">
                       Limite Atual
                     </Typography>
                     <Typography variant="h6">
-                      R$ {client.creditLimit.toLocaleString()}
-                    </Typography>
-                  </Box>
-
-                  <Box mb={2}>
-                    <Typography variant="caption" color="text.secondary">
-                      Limite Recomendado
-                    </Typography>
-                    <Typography variant="h6" color="primary.main">
-                      R$ {riskAnalysis.recommendedLimit.toLocaleString()}
+                      R$ {client.limite_credito.toLocaleString()}
                     </Typography>
                   </Box>
 
@@ -514,18 +437,30 @@ const CreditLimitForm: React.FC = () => {
                     <Typography variant="caption" color="text.secondary">
                       Limite Solicitado
                     </Typography>
-                    <Typography variant="h6" color={limitRec.type + '.main'}>
-                      R$ {formData.requestedLimit.toLocaleString()}
+                    <Typography variant="h6" color="primary.main">
+                      R$ {formData.limiteSolicitado.toLocaleString()}
+                    </Typography>
+                  </Box>
+
+                  <Box mb={2}>
+                    <Typography variant="caption" color="text.secondary">
+                      Variacao
+                    </Typography>
+                    <Typography variant="h6" color={formData.limiteSolicitado >= client.limite_credito ? 'success.main' : 'error.main'}>
+                      {formData.limiteSolicitado >= client.limite_credito ? '+' : ''}
+                      R$ {(formData.limiteSolicitado - client.limite_credito).toLocaleString()}
                     </Typography>
                   </Box>
 
                   <Divider sx={{ my: 2 }} />
 
-                  <Chip
-                    label={`${client.riskLevel.toUpperCase()} RISCO`}
-                    color={getRiskColor(client.riskLevel) as any}
-                    sx={{ fontWeight: 'bold', mb: 1 }}
-                  />
+                  {scoreResult && (
+                    <Chip
+                      label={`${scoreResult.classificacao}`}
+                      color={getClassificacaoColor(scoreResult.classificacao)}
+                      sx={{ fontWeight: 'bold', mb: 1 }}
+                    />
+                  )}
                 </CardContent>
               </Card>
             </Grid>
@@ -538,63 +473,59 @@ const CreditLimitForm: React.FC = () => {
             <CardContent>
               <Typography variant="h6" gutterBottom color="primary.main">
                 <CheckCircle sx={{ mr: 1, verticalAlign: 'middle' }} />
-                Confirmação da Solicitação
+                Confirmacao da Solicitacao
               </Typography>
-              
+
               <Grid container spacing={3}>
-                <Grid item xs={12} md={6}>
+                <Grid size={{ xs: 12, md: 6 }}>
                   <Paper variant="outlined" sx={{ p: 2 }}>
                     <Typography variant="subtitle2" gutterBottom>
                       Dados do Cliente
                     </Typography>
                     <Typography variant="body2">
-                      <strong>Nome:</strong> {client.name}
+                      <strong>Nome:</strong> {client.nome}
                     </Typography>
                     <Typography variant="body2">
-                      <strong>Documento:</strong> {client.document}
+                      <strong>Documento:</strong> {client.cpf_cnpj}
                     </Typography>
                     <Typography variant="body2">
-                      <strong>Score:</strong> {client.creditScore}
+                      <strong>Score:</strong> {scoreResult ? scoreResult.score_final : 'Nao calculado'}
                     </Typography>
                     <Typography variant="body2">
-                      <strong>Nível de Risco:</strong> {client.riskLevel}
+                      <strong>Classificacao:</strong> {scoreResult ? scoreResult.classificacao : '-'}
                     </Typography>
                   </Paper>
                 </Grid>
 
-                <Grid item xs={12} md={6}>
+                <Grid size={{ xs: 12, md: 6 }}>
                   <Paper variant="outlined" sx={{ p: 2 }}>
                     <Typography variant="subtitle2" gutterBottom>
-                      Configuração do Limite
+                      Solicitacao de Limite
                     </Typography>
                     <Typography variant="body2">
-                      <strong>Limite Atual:</strong> R$ {client.creditLimit.toLocaleString()}
+                      <strong>Limite Atual:</strong> R$ {client.limite_credito.toLocaleString()}
                     </Typography>
                     <Typography variant="body2">
-                      <strong>Novo Limite:</strong> R$ {formData.requestedLimit.toLocaleString()}
+                      <strong>Novo Limite:</strong> R$ {formData.limiteSolicitado.toLocaleString()}
                     </Typography>
                     <Typography variant="body2">
-                      <strong>Variação:</strong> {formData.requestedLimit > client.creditLimit ? '+' : ''}
-                      R$ {(formData.requestedLimit - client.creditLimit).toLocaleString()}
-                      ({((formData.requestedLimit - client.creditLimit) / client.creditLimit * 100).toFixed(1)}%)
-                    </Typography>
-                    <Typography variant="body2">
-                      <strong>Tipo:</strong> {formData.analysisType}
-                    </Typography>
-                    <Typography variant="body2">
-                      <strong>Urgência:</strong> {formData.urgency}
+                      <strong>Variacao:</strong> {formData.limiteSolicitado > client.limite_credito ? '+' : ''}
+                      R$ {(formData.limiteSolicitado - client.limite_credito).toLocaleString()}
+                      {client.limite_credito > 0 && (
+                        <> ({((formData.limiteSolicitado - client.limite_credito) / client.limite_credito * 100).toFixed(1)}%)</>
+                      )}
                     </Typography>
                   </Paper>
                 </Grid>
 
-                {formData.justification && (
-                  <Grid item xs={12}>
+                {formData.motivo && (
+                  <Grid size={12}>
                     <Paper variant="outlined" sx={{ p: 2 }}>
                       <Typography variant="subtitle2" gutterBottom>
-                        Justificativa
+                        Motivo
                       </Typography>
                       <Typography variant="body2">
-                        {formData.justification}
+                        {formData.motivo}
                       </Typography>
                     </Paper>
                   </Grid>
@@ -605,23 +536,33 @@ const CreditLimitForm: React.FC = () => {
         );
 
       default:
-        return 'Unknown step';
+        return 'Passo desconhecido';
     }
   };
 
   return (
     <Container maxWidth="xl" sx={{ py: 3 }}>
-      {/* Header */}
       <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
         <Typography variant="h4" component="h1" fontWeight="bold" color="primary">
-          Configuração de Limite de Crédito
+          Solicitacao de Limite de Credito
         </Typography>
         <Button variant="outlined" startIcon={<Cancel />} onClick={() => navigate(-1)}>
           Cancelar
         </Button>
       </Box>
 
-      {/* Stepper */}
+      {error && (
+        <Alert severity="error" sx={{ mb: 3 }} onClose={() => setError(null)}>
+          {error}
+        </Alert>
+      )}
+
+      {submitSuccess && (
+        <Alert severity="success" sx={{ mb: 3 }}>
+          Solicitacao de limite enviada com sucesso! Redirecionando...
+        </Alert>
+      )}
+
       <Paper elevation={2} sx={{ p: 2, mb: 3 }}>
         <Stepper activeStep={activeStep}>
           {steps.map((label) => (
@@ -632,12 +573,10 @@ const CreditLimitForm: React.FC = () => {
         </Stepper>
       </Paper>
 
-      {/* Step Content */}
       <Box sx={{ mb: 3 }}>
         {renderStepContent(activeStep)}
       </Box>
 
-      {/* Navigation */}
       <Paper elevation={2} sx={{ p: 2 }}>
         <Box sx={{ display: 'flex', flexDirection: 'row', pt: 2 }}>
           <Button
@@ -653,35 +592,34 @@ const CreditLimitForm: React.FC = () => {
             <Button
               variant="contained"
               onClick={() => setShowConfirmDialog(true)}
-              disabled={!formData.reason || !formData.justification}
-              startIcon={<Save />}
+              disabled={!formData.motivo || formData.limiteSolicitado <= 0 || isSubmitting}
+              startIcon={isSubmitting ? <CircularProgress size={20} /> : <Save />}
             >
-              Solicitar Aprovação
+              {isSubmitting ? 'Enviando...' : 'Solicitar Aprovacao'}
             </Button>
           ) : (
             <Button variant="contained" onClick={handleNext}>
-              Próximo
+              Proximo
             </Button>
           )}
         </Box>
       </Paper>
 
-      {/* Confirmation Dialog */}
       <Dialog open={showConfirmDialog} onClose={() => setShowConfirmDialog(false)}>
-        <DialogTitle>Confirmar Solicitação</DialogTitle>
+        <DialogTitle>Confirmar Solicitacao</DialogTitle>
         <DialogContent>
           <Typography>
-            Tem certeza de que deseja solicitar a alteração do limite de crédito de{' '}
-            <strong>{client.name}</strong> para{' '}
-            <strong>R$ {formData.requestedLimit.toLocaleString()}</strong>?
+            Tem certeza de que deseja solicitar a alteracao do limite de credito de{' '}
+            <strong>{client.nome}</strong> para{' '}
+            <strong>R$ {formData.limiteSolicitado.toLocaleString()}</strong>?
           </Typography>
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setShowConfirmDialog(false)}>
             Cancelar
           </Button>
-          <Button 
-            onClick={handleSubmit} 
+          <Button
+            onClick={handleSubmit}
             variant="contained"
             disabled={isSubmitting}
           >

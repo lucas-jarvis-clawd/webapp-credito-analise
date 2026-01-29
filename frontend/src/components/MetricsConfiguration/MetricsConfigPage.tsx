@@ -7,18 +7,9 @@ import {
   Typography,
   Box,
   Button,
-  TextField,
-  Switch,
-  FormControlLabel,
   Slider,
-  Paper,
   Divider,
   Alert,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  IconButton,
   Chip,
   Table,
   TableBody,
@@ -26,150 +17,181 @@ import {
   TableContainer,
   TableHead,
   TableRow,
-  Tooltip
+  CircularProgress
 } from '@mui/material';
 import {
-  Add,
-  Edit,
-  Delete,
   Save,
   Restore,
   Info,
-  Warning,
   Settings,
-  TrendingUp,
   Assessment
 } from '@mui/icons-material';
-import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Legend } from 'recharts';
-import { MetricConfiguration } from '../../types';
+import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
+import type { MetricConfiguration } from '../../types';
+import { configAPI } from '../../services/api';
 
-// Mock data
-const mockMetrics: MetricConfiguration[] = [
-  {
-    id: '1',
-    name: 'Histórico de Pagamento',
-    weight: 35,
-    isActive: true,
-    formula: 'payment_history_score * 0.35'
+const METRIC_DEFINITIONS: Record<string, { name: string; description: string }> = {
+  historico_pagamentos: {
+    name: 'Historico de Pagamentos',
+    description: 'Avalia o comportamento de pagamentos do cliente ao longo do tempo'
   },
-  {
-    id: '2',
-    name: 'Utilização de Crédito',
-    weight: 30,
-    isActive: true,
-    formula: '(1 - credit_utilization_ratio) * 0.30'
-  },
-  {
-    id: '3',
+  tempo_relacionamento: {
     name: 'Tempo de Relacionamento',
-    weight: 15,
-    isActive: true,
-    formula: 'relationship_years * 0.15'
+    description: 'Considera o tempo total de relacionamento comercial com o cliente'
   },
-  {
-    id: '4',
-    name: 'Diversificação de Crédito',
-    weight: 10,
-    isActive: true,
-    formula: 'credit_mix_score * 0.10'
+  tendencia_volume: {
+    name: 'Tendencia de Volume',
+    description: 'Analisa a tendencia de volume de compras do cliente'
   },
-  {
-    id: '5',
-    name: 'Renda vs Gastos',
-    weight: 10,
-    isActive: true,
-    formula: 'income_expense_ratio * 0.10'
+  prazo_medio_pagamento: {
+    name: 'Prazo Medio de Pagamento',
+    description: 'Avalia os prazos medios de pagamento praticados'
+  },
+  indice_sazonalidade: {
+    name: 'Indice de Sazonalidade',
+    description: 'Considera os padroes sazonais do negocio textil'
+  },
+  referencia_comercial: {
+    name: 'Referencia Comercial',
+    description: 'Avalia referencias comerciais do cliente no mercado'
+  },
+  capacidade_estimada: {
+    name: 'Capacidade Estimada',
+    description: 'Estima a capacidade de credito baseada no faturamento'
   }
-];
+};
 
-const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d'];
+const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d', '#ffc658'];
 
 const MetricsConfigPage: React.FC = () => {
-  const [metrics, setMetrics] = useState<MetricConfiguration[]>(mockMetrics);
-  const [editingMetric, setEditingMetric] = useState<MetricConfiguration | null>(null);
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [metrics, setMetrics] = useState<MetricConfiguration[]>([]);
+  const [originalWeights, setOriginalWeights] = useState<Record<string, number>>({});
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [hasChanges, setHasChanges] = useState(false);
-  const [totalWeight, setTotalWeight] = useState(100);
+
+  const totalWeight = metrics
+    .filter(m => m.isActive)
+    .reduce((sum, metric) => sum + metric.weight, 0);
 
   useEffect(() => {
-    const activeMetrics = metrics.filter(m => m.isActive);
-    const total = activeMetrics.reduce((sum, metric) => sum + metric.weight, 0);
-    setTotalWeight(total);
-  }, [metrics]);
+    loadConfig();
+  }, []);
+
+  const loadConfig = async () => {
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const response = await configAPI.getScoring();
+      if (response.data.success) {
+        const config = response.data.data;
+        const weights = config.pesos || {};
+
+        const metricsFromConfig: MetricConfiguration[] = Object.entries(weights).map(([key, weight]) => ({
+          id: key,
+          name: METRIC_DEFINITIONS[key]?.name || key,
+          key: key,
+          weight: Math.round((weight as number) * 100),
+          isActive: true,
+          description: METRIC_DEFINITIONS[key]?.description || ''
+        }));
+
+        if (metricsFromConfig.length === 0) {
+          const defaultMetrics: MetricConfiguration[] = Object.entries(METRIC_DEFINITIONS).map(([key, def]) => ({
+            id: key,
+            name: def.name,
+            key: key,
+            weight: Math.round(100 / Object.keys(METRIC_DEFINITIONS).length),
+            isActive: true,
+            description: def.description
+          }));
+          setMetrics(defaultMetrics);
+        } else {
+          setMetrics(metricsFromConfig);
+        }
+
+        const origWeights: Record<string, number> = {};
+        Object.entries(weights).forEach(([key, value]) => {
+          origWeights[key] = Math.round((value as number) * 100);
+        });
+        setOriginalWeights(origWeights);
+        setHasChanges(false);
+      }
+    } catch (err: unknown) {
+      const axiosErr = err as { response?: { data?: { message?: string } } };
+      setError(axiosErr.response?.data?.message || 'Erro ao carregar configuracao de scoring.');
+      const defaultMetrics: MetricConfiguration[] = Object.entries(METRIC_DEFINITIONS).map(([key, def]) => ({
+        id: key,
+        name: def.name,
+        key: key,
+        weight: Math.round(100 / Object.keys(METRIC_DEFINITIONS).length),
+        isActive: true,
+        description: def.description
+      }));
+      setMetrics(defaultMetrics);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const handleWeightChange = (id: string, newWeight: number) => {
-    setMetrics(prev => prev.map(metric => 
+    setMetrics(prev => prev.map(metric =>
       metric.id === id ? { ...metric, weight: newWeight } : metric
     ));
     setHasChanges(true);
+    setSuccessMessage(null);
   };
 
-  const handleActiveChange = (id: string, isActive: boolean) => {
-    setMetrics(prev => prev.map(metric => 
-      metric.id === id ? { ...metric, isActive } : metric
-    ));
-    setHasChanges(true);
-  };
+  const handleSaveConfiguration = async () => {
+    setIsSaving(true);
+    setError(null);
+    setSuccessMessage(null);
 
-  const handleEditMetric = (metric: MetricConfiguration) => {
-    setEditingMetric({ ...metric });
-    setIsDialogOpen(true);
-  };
+    try {
+      const weights: Record<string, number> = {};
+      metrics
+        .filter(m => m.isActive)
+        .forEach(m => {
+          weights[m.key] = m.weight / 100;
+        });
 
-  const handleSaveMetric = () => {
-    if (editingMetric) {
-      if (editingMetric.id) {
-        // Edit existing
-        setMetrics(prev => prev.map(m => m.id === editingMetric.id ? editingMetric : m));
-      } else {
-        // Add new
-        const newMetric = {
-          ...editingMetric,
-          id: Date.now().toString()
-        };
-        setMetrics(prev => [...prev, newMetric]);
-      }
-      setHasChanges(true);
+      await configAPI.updateScoringWeights(weights);
+      setSuccessMessage('Configuracao salva com sucesso!');
+      setHasChanges(false);
+
+      const origWeights: Record<string, number> = {};
+      metrics.forEach(m => {
+        origWeights[m.key] = m.weight;
+      });
+      setOriginalWeights(origWeights);
+    } catch (err: unknown) {
+      const axiosErr = err as { response?: { data?: { message?: string } } };
+      setError(axiosErr.response?.data?.message || 'Erro ao salvar configuracao.');
+    } finally {
+      setIsSaving(false);
     }
-    setIsDialogOpen(false);
-    setEditingMetric(null);
   };
 
-  const handleDeleteMetric = (id: string) => {
-    setMetrics(prev => prev.filter(m => m.id !== id));
-    setHasChanges(true);
-  };
-
-  const handleAddNewMetric = () => {
-    setEditingMetric({
-      id: '',
-      name: '',
-      weight: 5,
-      isActive: true,
-      formula: ''
-    });
-    setIsDialogOpen(true);
-  };
-
-  const handleSaveConfiguration = () => {
-    // Here would be the API call to save configuration
-    console.log('Saving configuration:', metrics);
+  const handleResetToOriginal = () => {
+    setMetrics(prev => prev.map(metric => ({
+      ...metric,
+      weight: originalWeights[metric.key] || metric.weight
+    })));
     setHasChanges(false);
-  };
-
-  const handleResetToDefaults = () => {
-    setMetrics(mockMetrics);
-    setHasChanges(true);
+    setSuccessMessage(null);
   };
 
   const normalizeWeights = () => {
     const activeMetrics = metrics.filter(m => m.isActive);
     const currentTotal = activeMetrics.reduce((sum, metric) => sum + metric.weight, 0);
-    
-    if (currentTotal !== 100) {
+
+    if (currentTotal !== 100 && currentTotal > 0) {
       const factor = 100 / currentTotal;
-      setMetrics(prev => prev.map(metric => 
-        metric.isActive 
+      setMetrics(prev => prev.map(metric =>
+        metric.isActive
           ? { ...metric, weight: Math.round(metric.weight * factor) }
           : metric
       ));
@@ -186,12 +208,25 @@ const MetricsConfigPage: React.FC = () => {
     }));
 
   const getWeightStatus = () => {
-    if (totalWeight === 100) return { color: 'success', message: 'Configuração válida' };
-    if (totalWeight > 100) return { color: 'error', message: `Excesso de ${totalWeight - 100}%` };
-    return { color: 'warning', message: `Faltam ${100 - totalWeight}%` };
+    if (totalWeight === 100) return { color: 'success' as const, message: 'Configuracao valida' };
+    if (totalWeight > 100) return { color: 'error' as const, message: `Excesso de ${totalWeight - 100}%` };
+    return { color: 'warning' as const, message: `Faltam ${100 - totalWeight}%` };
   };
 
   const weightStatus = getWeightStatus();
+
+  if (isLoading) {
+    return (
+      <Container maxWidth="xl" sx={{ py: 3 }}>
+        <Box display="flex" flexDirection="column" alignItems="center" justifyContent="center" minHeight="60vh">
+          <CircularProgress size={60} />
+          <Typography variant="h6" color="text.secondary" mt={3}>
+            Carregando configuracao de metricas...
+          </Typography>
+        </Box>
+      </Container>
+    );
+  }
 
   return (
     <Container maxWidth="xl" sx={{ py: 3 }}>
@@ -199,37 +234,49 @@ const MetricsConfigPage: React.FC = () => {
       <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
         <Typography variant="h4" component="h1" fontWeight="bold" color="primary">
           <Settings sx={{ mr: 2, verticalAlign: 'middle' }} />
-          Configuração de Métricas
+          Configuracao de Metricas
         </Typography>
         <Box display="flex" gap={2}>
           <Button
             variant="outlined"
             startIcon={<Restore />}
-            onClick={handleResetToDefaults}
+            onClick={handleResetToOriginal}
+            disabled={!hasChanges}
           >
-            Restaurar Padrões
+            Restaurar
           </Button>
           <Button
             variant="contained"
-            startIcon={<Save />}
+            startIcon={isSaving ? <CircularProgress size={20} color="inherit" /> : <Save />}
             onClick={handleSaveConfiguration}
-            disabled={!hasChanges || totalWeight !== 100}
+            disabled={!hasChanges || totalWeight !== 100 || isSaving}
           >
-            Salvar Configuração
+            {isSaving ? 'Salvando...' : 'Salvar Configuracao'}
           </Button>
         </Box>
       </Box>
 
-      {/* Status Alert */}
-      <Alert 
-        severity={weightStatus.color as any} 
+      {error && (
+        <Alert severity="error" sx={{ mb: 3 }} onClose={() => setError(null)}>
+          {error}
+        </Alert>
+      )}
+
+      {successMessage && (
+        <Alert severity="success" sx={{ mb: 3 }} onClose={() => setSuccessMessage(null)}>
+          {successMessage}
+        </Alert>
+      )}
+
+      <Alert
+        severity={weightStatus.color}
         sx={{ mb: 3 }}
         action={
-          totalWeight !== 100 && (
+          totalWeight !== 100 ? (
             <Button color="inherit" size="small" onClick={normalizeWeights}>
               Normalizar
             </Button>
-          )
+          ) : undefined
         }
       >
         <Box display="flex" alignItems="center" gap={1}>
@@ -237,38 +284,29 @@ const MetricsConfigPage: React.FC = () => {
             <strong>Peso Total: {totalWeight}%</strong> - {weightStatus.message}
           </Typography>
           {hasChanges && (
-            <Chip label="Alterações não salvas" color="warning" size="small" />
+            <Chip label="Alteracoes nao salvas" color="warning" size="small" />
           )}
         </Box>
       </Alert>
 
       <Grid container spacing={3}>
         {/* Configuration Panel */}
-        <Grid item xs={12} lg={8}>
+        <Grid size={{ xs: 12, lg: 8 }}>
           <Card elevation={3}>
             <CardContent>
               <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
                 <Typography variant="h6" fontWeight="bold">
-                  Configuração das Métricas
+                  Configuracao das Metricas Texteis (7 metricas)
                 </Typography>
-                <Button
-                  variant="outlined"
-                  startIcon={<Add />}
-                  onClick={handleAddNewMetric}
-                >
-                  Nova Métrica
-                </Button>
               </Box>
 
               <TableContainer>
                 <Table>
                   <TableHead>
                     <TableRow>
-                      <TableCell>Métrica</TableCell>
-                      <TableCell align="center">Status</TableCell>
-                      <TableCell align="center">Peso (%)</TableCell>
-                      <TableCell align="center">Fórmula</TableCell>
-                      <TableCell align="center">Ações</TableCell>
+                      <TableCell>Metrica</TableCell>
+                      <TableCell>Descricao</TableCell>
+                      <TableCell align="center" sx={{ width: 250 }}>Peso (%)</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
@@ -279,19 +317,12 @@ const MetricsConfigPage: React.FC = () => {
                             {metric.name}
                           </Typography>
                         </TableCell>
-                        <TableCell align="center">
-                          <FormControlLabel
-                            control={
-                              <Switch
-                                checked={metric.isActive}
-                                onChange={(e) => handleActiveChange(metric.id, e.target.checked)}
-                                size="small"
-                              />
-                            }
-                            label=""
-                          />
+                        <TableCell>
+                          <Typography variant="body2" color="text.secondary">
+                            {metric.description}
+                          </Typography>
                         </TableCell>
-                        <TableCell align="center" sx={{ width: 200 }}>
+                        <TableCell align="center" sx={{ width: 250 }}>
                           <Box sx={{ px: 2 }}>
                             <Slider
                               value={metric.weight}
@@ -308,36 +339,6 @@ const MetricsConfigPage: React.FC = () => {
                             </Typography>
                           </Box>
                         </TableCell>
-                        <TableCell>
-                          <Tooltip title={metric.formula}>
-                            <Typography variant="caption" 
-                              sx={{ 
-                                maxWidth: 200, 
-                                overflow: 'hidden',
-                                textOverflow: 'ellipsis',
-                                whiteSpace: 'nowrap',
-                                display: 'block'
-                              }}
-                            >
-                              {metric.formula}
-                            </Typography>
-                          </Tooltip>
-                        </TableCell>
-                        <TableCell align="center">
-                          <IconButton 
-                            size="small" 
-                            onClick={() => handleEditMetric(metric)}
-                          >
-                            <Edit />
-                          </IconButton>
-                          <IconButton 
-                            size="small" 
-                            color="error"
-                            onClick={() => handleDeleteMetric(metric.id)}
-                          >
-                            <Delete />
-                          </IconButton>
-                        </TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
@@ -351,33 +352,33 @@ const MetricsConfigPage: React.FC = () => {
             <CardContent>
               <Typography variant="h6" fontWeight="bold" gutterBottom>
                 <Assessment sx={{ mr: 1, verticalAlign: 'middle' }} />
-                Simulação de Impacto
+                Visualizacao de Pesos
               </Typography>
-              
+
               <Grid container spacing={3}>
-                <Grid item xs={12} md={6}>
+                <Grid size={{ xs: 12, md: 6 }}>
                   <Typography variant="subtitle2" gutterBottom>
-                    Cenário: Cliente com Score 750
+                    Distribuicao de Pesos
                   </Typography>
                   <Box sx={{ height: 200 }}>
                     <ResponsiveContainer>
                       <BarChart data={chartData}>
                         <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis dataKey="name" angle={-45} textAnchor="end" height={60} />
+                        <XAxis dataKey="name" angle={-30} textAnchor="end" height={80} interval={0} tick={{ fontSize: 10 }} />
                         <YAxis />
                         <Bar dataKey="weight" fill="#2196f3" />
                       </BarChart>
                     </ResponsiveContainer>
                   </Box>
                 </Grid>
-                
-                <Grid item xs={12} md={6}>
+
+                <Grid size={{ xs: 12, md: 6 }}>
                   <Typography variant="subtitle2" gutterBottom>
-                    Contribuição por Métrica
+                    Contribuicao por Metrica
                   </Typography>
-                  <Box sx={{ 
-                    display: 'flex', 
-                    flexDirection: 'column', 
+                  <Box sx={{
+                    display: 'flex',
+                    flexDirection: 'column',
                     gap: 2,
                     maxHeight: 200,
                     overflowY: 'auto'
@@ -398,8 +399,8 @@ const MetricsConfigPage: React.FC = () => {
                           <Typography variant="body2" flexGrow={1}>
                             {metric.name}
                           </Typography>
-                          <Chip 
-                            label={`${metric.weight}%`} 
+                          <Chip
+                            label={`${metric.weight}%`}
                             size="small"
                             color="primary"
                           />
@@ -414,11 +415,11 @@ const MetricsConfigPage: React.FC = () => {
         </Grid>
 
         {/* Visual Summary */}
-        <Grid item xs={12} lg={4}>
+        <Grid size={{ xs: 12, lg: 4 }}>
           <Card elevation={3}>
             <CardContent>
               <Typography variant="h6" fontWeight="bold" gutterBottom>
-                Distribuição Visual
+                Distribuicao Visual
               </Typography>
               <Box sx={{ height: 300 }}>
                 <ResponsiveContainer>
@@ -428,7 +429,6 @@ const MetricsConfigPage: React.FC = () => {
                       cx="50%"
                       cy="50%"
                       labelLine={false}
-                      label={({ name, weight }) => `${weight}%`}
                       outerRadius={100}
                       fill="#8884d8"
                       dataKey="weight"
@@ -447,12 +447,12 @@ const MetricsConfigPage: React.FC = () => {
             <CardContent>
               <Typography variant="h6" fontWeight="bold" gutterBottom>
                 <Info sx={{ mr: 1, verticalAlign: 'middle' }} />
-                Resumo da Configuração
+                Resumo da Configuracao
               </Typography>
-              
+
               <Box sx={{ mb: 2 }}>
                 <Typography variant="body2" color="text.secondary" gutterBottom>
-                  Métricas Ativas
+                  Metricas Ativas
                 </Typography>
                 <Typography variant="h4" color="primary.main">
                   {metrics.filter(m => m.isActive).length}
@@ -473,8 +473,8 @@ const MetricsConfigPage: React.FC = () => {
               {totalWeight !== 100 && (
                 <Alert severity="warning" sx={{ mt: 2 }}>
                   <Typography variant="body2">
-                    {totalWeight < 100 
-                      ? `Adicione ${100 - totalWeight}% para completar a configuração`
+                    {totalWeight < 100
+                      ? `Adicione ${100 - totalWeight}% para completar a configuracao`
                       : `Reduza ${totalWeight - 100}% para balancear os pesos`
                     }
                   </Typography>
@@ -484,66 +484,6 @@ const MetricsConfigPage: React.FC = () => {
           </Card>
         </Grid>
       </Grid>
-
-      {/* Edit Dialog */}
-      <Dialog open={isDialogOpen} onClose={() => setIsDialogOpen(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>
-          {editingMetric?.id ? 'Editar Métrica' : 'Nova Métrica'}
-        </DialogTitle>
-        <DialogContent>
-          <TextField
-            autoFocus
-            margin="dense"
-            label="Nome da Métrica"
-            fullWidth
-            variant="outlined"
-            value={editingMetric?.name || ''}
-            onChange={(e) => setEditingMetric(prev => prev ? { ...prev, name: e.target.value } : null)}
-          />
-          <TextField
-            margin="dense"
-            label="Peso (%)"
-            type="number"
-            fullWidth
-            variant="outlined"
-            inputProps={{ min: 0, max: 50 }}
-            value={editingMetric?.weight || 0}
-            onChange={(e) => setEditingMetric(prev => prev ? { ...prev, weight: Number(e.target.value) } : null)}
-          />
-          <TextField
-            margin="dense"
-            label="Fórmula de Cálculo"
-            fullWidth
-            variant="outlined"
-            multiline
-            rows={3}
-            value={editingMetric?.formula || ''}
-            onChange={(e) => setEditingMetric(prev => prev ? { ...prev, formula: e.target.value } : null)}
-          />
-          <FormControlLabel
-            control={
-              <Switch
-                checked={editingMetric?.isActive || false}
-                onChange={(e) => setEditingMetric(prev => prev ? { ...prev, isActive: e.target.checked } : null)}
-              />
-            }
-            label="Métrica Ativa"
-            sx={{ mt: 2 }}
-          />
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setIsDialogOpen(false)}>
-            Cancelar
-          </Button>
-          <Button 
-            onClick={handleSaveMetric} 
-            variant="contained"
-            disabled={!editingMetric?.name || !editingMetric?.formula}
-          >
-            Salvar
-          </Button>
-        </DialogActions>
-      </Dialog>
     </Container>
   );
 };

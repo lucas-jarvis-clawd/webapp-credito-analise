@@ -28,7 +28,27 @@ const rejectLimitSchema = Joi.object({
   motivo: Joi.string().min(10).max(500).required()
 });
 
-// GET /api/limits/pending - Buscar solicitações pendentes (apenas ADMIN/ANALISTA)
+/**
+ * @swagger
+ * /limits/pending:
+ *   get:
+ *     summary: Listar solicitacoes de limite pendentes (ADMIN/ANALISTA)
+ *     tags: [Limites de Credito]
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           default: 1
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 10
+ *     responses:
+ *       200:
+ *         description: Lista paginada de limites pendentes
+ */
 router.get('/pending', requireRole(['ADMIN', 'ANALISTA']), async (req, res, next) => {
   try {
     const page = parseInt(req.query.page as string) || 1;
@@ -163,7 +183,33 @@ router.get('/client/:clienteId/current', async (req, res, next) => {
   }
 });
 
-// POST /api/limits/request - Criar solicitação de limite
+/**
+ * @swagger
+ * /limits/request:
+ *   post:
+ *     summary: Criar solicitacao de limite de credito
+ *     tags: [Limites de Credito]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [cliente_id, limite_solicitado, motivo]
+ *             properties:
+ *               cliente_id:
+ *                 type: integer
+ *               limite_solicitado:
+ *                 type: number
+ *               motivo:
+ *                 type: string
+ *                 minLength: 10
+ *     responses:
+ *       201:
+ *         description: Solicitacao criada
+ *       400:
+ *         description: Dados invalidos ou solicitacao pendente existente
+ */
 router.post('/request', async (req, res, next) => {
   try {
     const { error } = createLimitRequestSchema.validate(req.body);
@@ -204,7 +250,36 @@ router.post('/request', async (req, res, next) => {
   }
 });
 
-// POST /api/limits/:id/approve - Aprovar solicitação (apenas ADMIN/ANALISTA)
+/**
+ * @swagger
+ * /limits/{id}/approve:
+ *   post:
+ *     summary: Aprovar solicitacao de limite (ADMIN/ANALISTA)
+ *     tags: [Limites de Credito]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [limite_aprovado]
+ *             properties:
+ *               limite_aprovado:
+ *                 type: number
+ *               observacoes:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Limite aprovado
+ *       404:
+ *         description: Solicitacao nao encontrada
+ */
 router.post('/:id/approve', requireRole(['ADMIN', 'ANALISTA']), async (req, res, next) => {
   try {
     const id = parseInt(req.params.id);
@@ -246,7 +321,35 @@ router.post('/:id/approve', requireRole(['ADMIN', 'ANALISTA']), async (req, res,
   }
 });
 
-// POST /api/limits/:id/reject - Rejeitar solicitação (apenas ADMIN/ANALISTA)
+/**
+ * @swagger
+ * /limits/{id}/reject:
+ *   post:
+ *     summary: Rejeitar solicitacao de limite (ADMIN/ANALISTA)
+ *     tags: [Limites de Credito]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [motivo]
+ *             properties:
+ *               motivo:
+ *                 type: string
+ *                 minLength: 10
+ *     responses:
+ *       200:
+ *         description: Limite rejeitado
+ *       404:
+ *         description: Solicitacao nao encontrada
+ */
 router.post('/:id/reject', requireRole(['ADMIN', 'ANALISTA']), async (req, res, next) => {
   try {
     const id = parseInt(req.params.id);

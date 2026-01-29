@@ -8,6 +8,7 @@ import DashboardPage from './components/Dashboard/DashboardPage';
 import ClientAnalysisPage from './components/ClientAnalysis/ClientAnalysisPage';
 import MetricsConfigPage from './components/MetricsConfiguration/MetricsConfigPage';
 import CreditLimitForm from './components/CreditLimit/CreditLimitForm';
+import LimitsManagementPage from './components/LimitsManagement/LimitsManagementPage';
 
 // Create Material-UI theme
 const theme = createTheme({
@@ -160,6 +161,16 @@ const AppContent: React.FC = () => {
           <ProtectedRoute>
             <MainLayout>
               <MetricsConfigPage />
+            </MainLayout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/limits"
+        element={
+          <ProtectedRoute>
+            <MainLayout>
+              <LimitsManagementPage />
             </MainLayout>
           </ProtectedRoute>
         }

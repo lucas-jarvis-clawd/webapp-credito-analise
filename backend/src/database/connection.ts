@@ -1,58 +1,27 @@
-import oracledb from 'oracledb';
 import { logger } from '../utils/logger';
+import { MemoryDatabase, getMemoryDb } from './memoryDb';
 
-oracledb.outFormat = oracledb.OUT_FORMAT_OBJECT;
-oracledb.autoCommit = true;
+let db: MemoryDatabase | null = null;
 
-const dbConfig = {
-  user: process.env.DB_USER || 'credito_user',
-  password: process.env.DB_PASSWORD || 'credito_pass',
-  connectString: `${process.env.DB_HOST || 'localhost'}:${process.env.DB_PORT || 1521}/${process.env.DB_SERVICE_NAME || 'xe'}`,
-  poolMin: 2,
-  poolMax: 10,
-  poolIncrement: 2,
-  poolTimeout: 60,
-  enableStatistics: true
-};
-
-let pool: oracledb.Pool;
-
-export const initializeDatabase = async () => {
+export const initializeDatabase = async (): Promise<MemoryDatabase> => {
   try {
-    pool = await oracledb.createPool(dbConfig);
-    logger.info('✅ Pool de conexões Oracle Database criado com sucesso');
-    return pool;
+    db = getMemoryDb();
+    logger.info('Banco de dados em memoria inicializado com sucesso');
+    return db;
   } catch (error) {
-    logger.error('❌ Erro ao conectar com Oracle Database:', error);
+    logger.error('Erro ao inicializar banco de dados em memoria:', error);
     throw error;
   }
 };
 
-export const getConnection = async () => {
-  try {
-    if (!pool) {
-      await initializeDatabase();
-    }
-    const connection = await pool.getConnection();
-    return connection;
-  } catch (error) {
-    logger.error('❌ Erro ao obter conexão:', error);
-    throw error;
+export const getDb = (): MemoryDatabase => {
+  if (!db) {
+    db = getMemoryDb();
   }
+  return db;
 };
 
-export const closeDatabase = async () => {
-  try {
-    if (pool) {
-      await pool.close(10);
-      logger.info('✅ Pool de conexões fechado');
-    }
-  } catch (error) {
-    logger.error('❌ Erro ao fechar pool de conexões:', error);
-    throw error;
-  }
+export const closeDatabase = async (): Promise<void> => {
+  logger.info('Banco de dados em memoria encerrado');
+  db = null;
 };
-
-// Graceful shutdown
-process.once('SIGTERM', closeDatabase);
-process.once('SIGINT', closeDatabase);

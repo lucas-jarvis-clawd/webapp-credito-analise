@@ -175,7 +175,7 @@ const LoginPage: React.FC = () => {
               <strong>Admin:</strong> admin / admin123
             </Typography>
             <Typography variant="body2" color="text.secondary">
-              <strong>Analista:</strong> analyst / analyst123
+              <strong>Analista:</strong> analista1 / analista1123
             </Typography>
           </Box>
         </Paper>

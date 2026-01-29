@@ -1,64 +1,46 @@
-import { getConnection } from '../database/connection';
-import { LimiteCredito } from '../models/types';
+import { getDb } from '../database/connection';
+import { LimiteCredito, Cliente } from '../models/types';
 import { logger } from '../utils/logger';
-import oracledb from 'oracledb';
 
 export class LimitService {
 
   async getLimitesByClient(clienteId: number): Promise<LimiteCredito[]> {
-    const connection = await getConnection();
     try {
-      const result = await connection.execute(`
-        SELECT * FROM limites_credito 
-        WHERE cliente_id = :clienteId 
-        ORDER BY created_at DESC
-      `, { clienteId });
-      
-      return result.rows as LimiteCredito[];
-      
+      const db = getDb();
+      const limites = db.query('limites_credito', (l: LimiteCredito) => l.cliente_id === clienteId);
+      limites.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+      return limites;
     } catch (error) {
       logger.error('Erro ao buscar limites do cliente:', error);
       throw error;
-    } finally {
-      await connection.close();
     }
   }
 
   async createLimitRequest(
-    clienteId: number, 
-    limiteSolicitado: number, 
-    motivo: string, 
-    solicitadoPor: string
+    clienteId: number,
+    limiteSolicitado: number,
+    motivo: string,
+    _solicitadoPor: string
   ): Promise<LimiteCredito> {
-    const connection = await getConnection();
     try {
-      const result = await connection.execute(`
-        INSERT INTO limites_credito (
-          cliente_id, limite_solicitado, motivo, status, created_at, updated_at
-        ) VALUES (
-          :clienteId, :limiteSolicitado, :motivo, 'PENDENTE', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
-        ) RETURNING id INTO :id
-      `, {
-        clienteId,
-        limiteSolicitado,
-        motivo,
-        id: { dir: oracledb.BIND_OUT, type: oracledb.NUMBER }
-      });
+      const db = getDb();
+      const cliente = db.getById('clientes', clienteId);
+      const limiteAtual = cliente ? cliente.limite_credito : 0;
 
-      const newId = (result.outBinds as any)?.id?.[0];
-      
-      // Buscar o registro criado
-      const newRecord = await connection.execute(`
-        SELECT * FROM limites_credito WHERE id = :id
-      `, { id: newId });
-      
-      return newRecord.rows?.[0] as LimiteCredito;
-      
+      const newLimit = db.insert('limites_credito', {
+        cliente_id: clienteId,
+        limite_atual: limiteAtual,
+        limite_solicitado: limiteSolicitado,
+        motivo,
+        status: 'PENDENTE',
+        created_at: new Date(),
+        updated_at: new Date()
+      } as Omit<LimiteCredito, 'id'>);
+
+      return newLimit;
     } catch (error) {
-      logger.error('Erro ao criar solicitação de limite:', error);
+      logger.error('Erro ao criar solicitacao de limite:', error);
       throw error;
-    } finally {
-      await connection.close();
     }
   }
 
@@ -68,229 +50,185 @@ export class LimitService {
     aprovadoPor: string,
     observacoes?: string
   ): Promise<LimiteCredito> {
-    const connection = await getConnection();
     try {
-      // Atualizar o registro de limite
-      const result = await connection.execute(`
-        UPDATE limites_credito 
-        SET 
-          limite_aprovado = :limiteAprovado,
-          aprovado_por = :aprovadoPor,
-          data_aprovacao = CURRENT_TIMESTAMP,
-          status = 'ATIVO',
-          motivo = CASE 
-            WHEN :observacoes IS NOT NULL 
-            THEN motivo || ' - Obs: ' || :observacoes
-            ELSE motivo 
-          END,
-          updated_at = CURRENT_TIMESTAMP
-        WHERE id = :limitId
-      `, {
-        limitId,
-        limiteAprovado,
-        aprovadoPor,
-        observacoes: observacoes || null
-      });
-
-      if (result.rowsAffected === 0) {
-        throw new Error('Solicitação de limite não encontrada');
+      const db = getDb();
+      const existing = db.getById('limites_credito', limitId);
+      if (!existing) {
+        throw new Error('Solicitacao de limite nao encontrada');
       }
 
-      // Buscar os dados do limite atualizado
-      const limitResult = await connection.execute(`
-        SELECT * FROM limites_credito WHERE id = :limitId
-      `, { limitId });
+      const updatedMotivo = observacoes
+        ? (existing.motivo || '') + ' - Obs: ' + observacoes
+        : existing.motivo;
 
-      const limite = limitResult.rows?.[0] as LimiteCredito;
+      const updated = db.update('limites_credito', limitId, {
+        limite_aprovado: limiteAprovado,
+        aprovado_por: aprovadoPor,
+        data_aprovacao: new Date(),
+        status: 'ATIVO',
+        motivo: updatedMotivo,
+        updated_at: new Date()
+      } as Partial<LimiteCredito>);
 
-      // Atualizar o limite atual do cliente
-      await connection.execute(`
-        UPDATE clientes 
-        SET limite_credito = :limiteAprovado, updated_at = CURRENT_TIMESTAMP
-        WHERE id = :clienteId
-      `, {
-        limiteAprovado,
-        clienteId: limite.cliente_id
-      });
+      if (!updated) {
+        throw new Error('Falha ao atualizar solicitacao de limite');
+      }
 
-      return limite;
-      
+      // Update the client's credit limit
+      db.update('clientes', existing.cliente_id, {
+        limite_credito: limiteAprovado,
+        updated_at: new Date()
+      } as Partial<Cliente>);
+
+      return updated;
     } catch (error) {
       logger.error('Erro ao aprovar limite:', error);
       throw error;
-    } finally {
-      await connection.close();
     }
   }
 
-  async rejectLimitRequest(limitId: number, motivo: string, rejeitadoPor: string): Promise<LimiteCredito> {
-    const connection = await getConnection();
+  async rejectLimitRequest(
+    limitId: number,
+    motivo: string,
+    rejeitadoPor: string
+  ): Promise<LimiteCredito> {
     try {
-      const result = await connection.execute(`
-        UPDATE limites_credito 
-        SET 
-          status = 'REJEITADO',
-          motivo = :motivo,
-          aprovado_por = :rejeitadoPor,
-          data_aprovacao = CURRENT_TIMESTAMP,
-          updated_at = CURRENT_TIMESTAMP
-        WHERE id = :limitId
-      `, {
-        limitId,
-        motivo,
-        rejeitadoPor
-      });
-
-      if (result.rowsAffected === 0) {
-        throw new Error('Solicitação de limite não encontrada');
+      const db = getDb();
+      const existing = db.getById('limites_credito', limitId);
+      if (!existing) {
+        throw new Error('Solicitacao de limite nao encontrada');
       }
 
-      // Buscar o limite atualizado
-      const limitResult = await connection.execute(`
-        SELECT * FROM limites_credito WHERE id = :limitId
-      `, { limitId });
+      const updated = db.update('limites_credito', limitId, {
+        status: 'REJEITADO',
+        motivo,
+        aprovado_por: rejeitadoPor,
+        data_aprovacao: new Date(),
+        updated_at: new Date()
+      } as Partial<LimiteCredito>);
 
-      return limitResult.rows?.[0] as LimiteCredito;
-      
+      if (!updated) {
+        throw new Error('Falha ao rejeitar solicitacao de limite');
+      }
+
+      return updated;
     } catch (error) {
       logger.error('Erro ao rejeitar limite:', error);
       throw error;
-    } finally {
-      await connection.close();
     }
   }
 
-  async getPendingLimits(page: number = 1, limit: number = 10): Promise<{ limits: LimiteCredito[], total: number }> {
-    const connection = await getConnection();
+  async getPendingLimits(
+    page: number = 1,
+    limit: number = 10
+  ): Promise<{ limits: (LimiteCredito & { cliente_nome?: string; cpf_cnpj?: string })[]; total: number }> {
     try {
+      const db = getDb();
+      const pendingLimits = db.query('limites_credito', (l: LimiteCredito) => l.status === 'PENDENTE');
+
+      // Sort by created_at descending
+      pendingLimits.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+
+      const total = pendingLimits.length;
+
+      // Paginate
       const offset = (page - 1) * limit;
-      
-      // Query para buscar limites pendentes com dados do cliente
-      const limitsQuery = `
-        SELECT * FROM (
-          SELECT lc.*, c.nome as cliente_nome, c.cpf_cnpj,
-                 ROW_NUMBER() OVER (ORDER BY lc.created_at DESC) as rn
-          FROM limites_credito lc
-          INNER JOIN clientes c ON lc.cliente_id = c.id
-          WHERE lc.status = 'PENDENTE'
-        )
-        WHERE rn BETWEEN :offset + 1 AND :offset + :limit
-      `;
-      
-      // Query para contar total
-      const countQuery = `
-        SELECT COUNT(*) as total
-        FROM limites_credito 
-        WHERE status = 'PENDENTE'
-      `;
-      
-      const [limitsResult, countResult] = await Promise.all([
-        connection.execute(limitsQuery, { offset, limit }),
-        connection.execute(countQuery)
-      ]);
-      
-      const limits = limitsResult.rows as LimiteCredito[];
-      const total = (countResult.rows as any[])[0].TOTAL;
-      
-      return { limits, total };
-      
+      const paginated = pendingLimits.slice(offset, offset + limit);
+
+      // Enrich with client info
+      const enriched = paginated.map(l => {
+        const cliente = db.getById('clientes', l.cliente_id);
+        return {
+          ...l,
+          cliente_nome: cliente?.nome,
+          cpf_cnpj: cliente?.cpf_cnpj
+        };
+      });
+
+      return { limits: enriched, total };
     } catch (error) {
       logger.error('Erro ao buscar limites pendentes:', error);
       throw error;
-    } finally {
-      await connection.close();
     }
   }
 
-  async getLimitHistory(page: number = 1, limit: number = 10, clienteId?: number): Promise<{ limits: LimiteCredito[], total: number }> {
-    const connection = await getConnection();
+  async getLimitHistory(
+    page: number = 1,
+    limit: number = 10,
+    clienteId?: number
+  ): Promise<{ limits: (LimiteCredito & { cliente_nome?: string; cpf_cnpj?: string })[]; total: number }> {
     try {
-      const offset = (page - 1) * limit;
-      
-      let whereClause = 'WHERE 1=1';
-      let binds: any = { offset, limit };
-      
+      const db = getDb();
+      let allLimits = db.getAll('limites_credito');
+
       if (clienteId) {
-        whereClause += ' AND lc.cliente_id = :clienteId';
-        binds.clienteId = clienteId;
+        allLimits = allLimits.filter(l => l.cliente_id === clienteId);
       }
-      
-      // Query para buscar histórico com dados do cliente
-      const historyQuery = `
-        SELECT * FROM (
-          SELECT lc.*, c.nome as cliente_nome, c.cpf_cnpj,
-                 ROW_NUMBER() OVER (ORDER BY lc.updated_at DESC) as rn
-          FROM limites_credito lc
-          INNER JOIN clientes c ON lc.cliente_id = c.id
-          ${whereClause}
-        )
-        WHERE rn BETWEEN :offset + 1 AND :offset + :limit
-      `;
-      
-      // Query para contar total
-      const countQuery = `
-        SELECT COUNT(*) as total
-        FROM limites_credito lc
-        ${whereClause.replace('lc.', '')}
-      `;
-      
-      const [historyResult, countResult] = await Promise.all([
-        connection.execute(historyQuery, binds),
-        connection.execute(countQuery, binds)
-      ]);
-      
-      const limits = historyResult.rows as LimiteCredito[];
-      const total = (countResult.rows as any[])[0].TOTAL;
-      
-      return { limits, total };
-      
+
+      // Sort by updated_at descending
+      allLimits.sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
+
+      const total = allLimits.length;
+
+      // Paginate
+      const offset = (page - 1) * limit;
+      const paginated = allLimits.slice(offset, offset + limit);
+
+      // Enrich with client info
+      const enriched = paginated.map(l => {
+        const cliente = db.getById('clientes', l.cliente_id);
+        return {
+          ...l,
+          cliente_nome: cliente?.nome,
+          cpf_cnpj: cliente?.cpf_cnpj
+        };
+      });
+
+      return { limits: enriched, total };
     } catch (error) {
-      logger.error('Erro ao buscar histórico de limites:', error);
+      logger.error('Erro ao buscar historico de limites:', error);
       throw error;
-    } finally {
-      await connection.close();
     }
   }
 
-  async getLimitById(limitId: number): Promise<LimiteCredito | null> {
-    const connection = await getConnection();
+  async getLimitById(limitId: number): Promise<(LimiteCredito & { cliente_nome?: string; cpf_cnpj?: string }) | null> {
     try {
-      const result = await connection.execute(`
-        SELECT lc.*, c.nome as cliente_nome, c.cpf_cnpj
-        FROM limites_credito lc
-        INNER JOIN clientes c ON lc.cliente_id = c.id
-        WHERE lc.id = :limitId
-      `, { limitId });
-      
-      const limits = result.rows as LimiteCredito[];
-      return limits.length > 0 ? limits[0] : null;
-      
+      const db = getDb();
+      const limite = db.getById('limites_credito', limitId);
+      if (!limite) return null;
+
+      const cliente = db.getById('clientes', limite.cliente_id);
+      return {
+        ...limite,
+        cliente_nome: cliente?.nome,
+        cpf_cnpj: cliente?.cpf_cnpj
+      };
     } catch (error) {
       logger.error('Erro ao buscar limite por ID:', error);
       throw error;
-    } finally {
-      await connection.close();
     }
   }
 
   async getCurrentLimitByClient(clienteId: number): Promise<LimiteCredito | null> {
-    const connection = await getConnection();
     try {
-      const result = await connection.execute(`
-        SELECT * FROM limites_credito 
-        WHERE cliente_id = :clienteId AND status = 'ATIVO'
-        ORDER BY data_aprovacao DESC
-        ROWNUM = 1
-      `, { clienteId });
-      
-      const limits = result.rows as LimiteCredito[];
-      return limits.length > 0 ? limits[0] : null;
-      
+      const db = getDb();
+      const activeLimits = db.query('limites_credito',
+        (l: LimiteCredito) => l.cliente_id === clienteId && l.status === 'ATIVO'
+      );
+
+      if (activeLimits.length === 0) return null;
+
+      // Sort by data_aprovacao descending and return the most recent
+      activeLimits.sort((a, b) => {
+        const dateA = a.data_aprovacao ? new Date(a.data_aprovacao).getTime() : 0;
+        const dateB = b.data_aprovacao ? new Date(b.data_aprovacao).getTime() : 0;
+        return dateB - dateA;
+      });
+
+      return activeLimits[0];
     } catch (error) {
       logger.error('Erro ao buscar limite atual do cliente:', error);
       throw error;
-    } finally {
-      await connection.close();
     }
   }
 }

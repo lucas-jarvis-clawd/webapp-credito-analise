@@ -25,11 +25,9 @@ import {
   MoreVert,
   Search,
   Visibility,
-  Edit,
-  Assessment,
-  FilterList
+  CreditCard
 } from '@mui/icons-material';
-import { Client } from '../../types';
+import type { Client } from '../../types';
 import { useNavigate } from 'react-router-dom';
 
 interface ClientsTableProps {
@@ -37,25 +35,24 @@ interface ClientsTableProps {
 }
 
 type Order = 'asc' | 'desc';
-type OrderBy = keyof Client;
 
 const ClientsTable: React.FC<ClientsTableProps> = ({ clients }) => {
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const [order, setOrder] = useState<Order>('desc');
-  const [orderBy, setOrderBy] = useState<OrderBy>('lastAnalysisDate');
+  const [orderBy, setOrderBy] = useState<string>('score_final');
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
-  const [selectedClient, setSelectedClient] = useState<string | null>(null);
+  const [selectedClient, setSelectedClient] = useState<number | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const navigate = useNavigate();
 
-  const handleRequestSort = (property: OrderBy) => {
+  const handleRequestSort = (property: string) => {
     const isAsc = orderBy === property && order === 'asc';
     setOrder(isAsc ? 'desc' : 'asc');
     setOrderBy(property);
   };
 
-  const handleMenuOpen = (event: React.MouseEvent<HTMLElement>, clientId: string) => {
+  const handleMenuOpen = (event: React.MouseEvent<HTMLElement>, clientId: number) => {
     setAnchorEl(event.currentTarget);
     setSelectedClient(clientId);
   };
@@ -65,7 +62,7 @@ const ClientsTable: React.FC<ClientsTableProps> = ({ clients }) => {
     setSelectedClient(null);
   };
 
-  const handleChangePage = (event: unknown, newPage: number) => {
+  const handleChangePage = (_event: unknown, newPage: number) => {
     setPage(newPage);
   };
 
@@ -76,33 +73,31 @@ const ClientsTable: React.FC<ClientsTableProps> = ({ clients }) => {
 
   const filteredClients = useMemo(() => {
     return clients.filter(client =>
-      client.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      client.document.includes(searchTerm) ||
-      client.email.toLowerCase().includes(searchTerm.toLowerCase())
+      client.nome.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      client.cpf_cnpj.includes(searchTerm) ||
+      (client.email || '').toLowerCase().includes(searchTerm.toLowerCase())
     );
   }, [clients, searchTerm]);
 
   const sortedClients = useMemo(() => {
     return [...filteredClients].sort((a, b) => {
-      if (orderBy === 'lastAnalysisDate') {
-        const aValue = new Date(a[orderBy]).getTime();
-        const bValue = new Date(b[orderBy]).getTime();
-        return order === 'asc' ? aValue - bValue : bValue - aValue;
-      }
-      
-      const aValue = a[orderBy];
-      const bValue = b[orderBy];
-      
+      const aValue = a[orderBy as keyof Client];
+      const bValue = b[orderBy as keyof Client];
+
+      if (aValue == null && bValue == null) return 0;
+      if (aValue == null) return order === 'asc' ? -1 : 1;
+      if (bValue == null) return order === 'asc' ? 1 : -1;
+
       if (typeof aValue === 'string' && typeof bValue === 'string') {
-        return order === 'asc' 
+        return order === 'asc'
           ? aValue.localeCompare(bValue)
           : bValue.localeCompare(aValue);
       }
-      
+
       if (typeof aValue === 'number' && typeof bValue === 'number') {
         return order === 'asc' ? aValue - bValue : bValue - aValue;
       }
-      
+
       return 0;
     });
   }, [filteredClients, order, orderBy]);
@@ -111,60 +106,47 @@ const ClientsTable: React.FC<ClientsTableProps> = ({ clients }) => {
     return sortedClients.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage);
   }, [sortedClients, page, rowsPerPage]);
 
-  const getRiskColor = (riskLevel: string) => {
-    switch (riskLevel) {
-      case 'low': return 'success';
-      case 'medium': return 'warning';
-      case 'high': return 'error';
+  const getClassificacaoColor = (classificacao?: string): 'success' | 'info' | 'warning' | 'error' | 'default' => {
+    switch (classificacao) {
+      case 'EXCELENTE': return 'success';
+      case 'BOM': return 'info';
+      case 'REGULAR': return 'warning';
+      case 'RUIM': return 'error';
+      case 'PESSIMO': return 'error';
       default: return 'default';
     }
   };
 
-  const getStatusColor = (status: string) => {
+  const getStatusColor = (status: string): 'success' | 'warning' | 'error' | 'default' => {
     switch (status) {
-      case 'active': return 'success';
-      case 'pending': return 'warning';
-      case 'inactive': return 'error';
+      case 'ATIVO': return 'success';
+      case 'INATIVO': return 'warning';
+      case 'BLOQUEADO': return 'error';
       default: return 'default';
     }
   };
 
-  const getScoreColor = (score: number) => {
-    if (score >= 700) return '#4caf50';
-    if (score >= 600) return '#ff9800';
+  const getScoreColor = (score?: number) => {
+    if (!score && score !== 0) return '#757575';
+    if (score >= 80) return '#4caf50';
+    if (score >= 65) return '#2196f3';
+    if (score >= 50) return '#ff9800';
+    if (score >= 30) return '#ff5722';
     return '#f44336';
   };
 
-  const getStatusText = (status: string) => {
-    switch (status) {
-      case 'active': return 'Ativo';
-      case 'pending': return 'Pendente';
-      case 'inactive': return 'Inativo';
-      default: return status;
-    }
-  };
-
-  const getRiskText = (risk: string) => {
-    switch (risk) {
-      case 'low': return 'Baixo';
-      case 'medium': return 'Médio';
-      case 'high': return 'Alto';
-      default: return risk;
-    }
-  };
-
   const headCells = [
-    { id: 'name' as OrderBy, label: 'Cliente' },
-    { id: 'creditScore' as OrderBy, label: 'Score' },
-    { id: 'riskLevel' as OrderBy, label: 'Risco' },
-    { id: 'creditLimit' as OrderBy, label: 'Limite' },
-    { id: 'status' as OrderBy, label: 'Status' },
-    { id: 'lastAnalysisDate' as OrderBy, label: 'Última Análise' },
+    { id: 'nome', label: 'Cliente' },
+    { id: 'score_final', label: 'Score' },
+    { id: 'classificacao', label: 'Classificacao' },
+    { id: 'limite_credito', label: 'Limite' },
+    { id: 'status', label: 'Status' },
+    { id: 'tipo', label: 'Tipo' },
   ];
 
   return (
     <Paper elevation={3} sx={{ width: '100%', overflow: 'hidden' }}>
-      {/* Cabeçalho com busca */}
+      {/* Header with search */}
       <Box p={3} borderBottom="1px solid" borderColor="divider">
         <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
           <Typography variant="h6" fontWeight="bold">
@@ -210,109 +192,127 @@ const ClientsTable: React.FC<ClientsTableProps> = ({ clients }) => {
                 </TableCell>
               ))}
               <TableCell align="center" sx={{ fontWeight: 'bold', backgroundColor: 'grey.50' }}>
-                Ações
+                Acoes
               </TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
-            {paginatedClients.map((client) => (
-              <TableRow
-                hover
-                key={client.id}
-                sx={{ 
-                  cursor: 'pointer',
-                  '&:hover': {
-                    backgroundColor: 'action.hover'
-                  }
-                }}
-                onClick={() => navigate(`/client/${client.id}`)}
-              >
-                <TableCell>
-                  <Box display="flex" alignItems="center" gap={2}>
-                    <Avatar sx={{ bgcolor: 'primary.main', width: 40, height: 40 }}>
-                      {client.name.charAt(0)}
-                    </Avatar>
-                    <Box>
-                      <Typography variant="subtitle2" fontWeight="bold">
-                        {client.name}
-                      </Typography>
-                      <Typography variant="caption" color="text.secondary">
-                        {client.document}
-                      </Typography>
-                    </Box>
-                  </Box>
-                </TableCell>
-                <TableCell>
-                  <Box>
-                    <Typography 
-                      variant="h6" 
-                      sx={{ 
-                        color: getScoreColor(client.creditScore),
-                        fontWeight: 'bold'
-                      }}
-                    >
-                      {client.creditScore}
-                    </Typography>
-                    <LinearProgress
-                      variant="determinate"
-                      value={(client.creditScore / 850) * 100}
-                      sx={{
-                        width: 80,
-                        height: 4,
-                        borderRadius: 2,
-                        backgroundColor: 'grey.200',
-                        '& .MuiLinearProgress-bar': {
-                          backgroundColor: getScoreColor(client.creditScore),
-                          borderRadius: 2
-                        }
-                      }}
-                    />
-                  </Box>
-                </TableCell>
-                <TableCell>
-                  <Chip
-                    label={getRiskText(client.riskLevel)}
-                    color={getRiskColor(client.riskLevel) as any}
-                    size="small"
-                    variant="outlined"
-                  />
-                </TableCell>
-                <TableCell>
-                  <Typography variant="h6" color="primary.main" fontWeight="bold">
-                    R$ {client.creditLimit.toLocaleString()}
+            {paginatedClients.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={7} align="center" sx={{ py: 4 }}>
+                  <Typography variant="body2" color="text.secondary">
+                    Nenhum cliente encontrado
                   </Typography>
-                </TableCell>
-                <TableCell>
-                  <Chip
-                    label={getStatusText(client.status)}
-                    color={getStatusColor(client.status) as any}
-                    size="small"
-                  />
-                </TableCell>
-                <TableCell>
-                  <Typography variant="body2">
-                    {client.lastAnalysisDate.toLocaleDateString('pt-BR')}
-                  </Typography>
-                </TableCell>
-                <TableCell align="center">
-                  <Tooltip title="Mais opções">
-                    <IconButton
-                      size="small"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleMenuOpen(e, client.id);
-                      }}
-                    >
-                      <MoreVert />
-                    </IconButton>
-                  </Tooltip>
                 </TableCell>
               </TableRow>
-            ))}
+            ) : (
+              paginatedClients.map((client) => (
+                <TableRow
+                  hover
+                  key={client.id}
+                  sx={{
+                    cursor: 'pointer',
+                    '&:hover': {
+                      backgroundColor: 'action.hover'
+                    }
+                  }}
+                  onClick={() => navigate(`/client/${client.id}`)}
+                >
+                  <TableCell>
+                    <Box display="flex" alignItems="center" gap={2}>
+                      <Avatar sx={{ bgcolor: 'primary.main', width: 40, height: 40 }}>
+                        {client.nome.charAt(0)}
+                      </Avatar>
+                      <Box>
+                        <Typography variant="subtitle2" fontWeight="bold">
+                          {client.nome}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          {client.cpf_cnpj}
+                        </Typography>
+                      </Box>
+                    </Box>
+                  </TableCell>
+                  <TableCell>
+                    <Box>
+                      <Typography
+                        variant="h6"
+                        sx={{
+                          color: getScoreColor(client.score_final),
+                          fontWeight: 'bold'
+                        }}
+                      >
+                        {client.score_final ?? '-'}
+                      </Typography>
+                      {client.score_final != null && (
+                        <LinearProgress
+                          variant="determinate"
+                          value={Math.min(client.score_final, 100)}
+                          sx={{
+                            width: 80,
+                            height: 4,
+                            borderRadius: 2,
+                            backgroundColor: 'grey.200',
+                            '& .MuiLinearProgress-bar': {
+                              backgroundColor: getScoreColor(client.score_final),
+                              borderRadius: 2
+                            }
+                          }}
+                        />
+                      )}
+                    </Box>
+                  </TableCell>
+                  <TableCell>
+                    {client.classificacao ? (
+                      <Chip
+                        label={client.classificacao}
+                        color={getClassificacaoColor(client.classificacao)}
+                        size="small"
+                        variant="outlined"
+                      />
+                    ) : (
+                      <Typography variant="body2" color="text.secondary">-</Typography>
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    <Typography variant="h6" color="primary.main" fontWeight="bold">
+                      R$ {client.limite_credito.toLocaleString()}
+                    </Typography>
+                  </TableCell>
+                  <TableCell>
+                    <Chip
+                      label={client.status}
+                      color={getStatusColor(client.status)}
+                      size="small"
+                    />
+                  </TableCell>
+                  <TableCell>
+                    <Chip
+                      label={client.tipo}
+                      size="small"
+                      variant="outlined"
+                    />
+                  </TableCell>
+                  <TableCell align="center">
+                    <Tooltip title="Mais opcoes">
+                      <IconButton
+                        size="small"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleMenuOpen(e, client.id);
+                        }}
+                      >
+                        <MoreVert />
+                      </IconButton>
+                    </Tooltip>
+                  </TableCell>
+                </TableRow>
+              ))
+            )}
           </TableBody>
         </Table>
       </TableContainer>
-      
+
       <TablePagination
         rowsPerPageOptions={[5, 10, 25, 50]}
         component="div"
@@ -321,11 +321,11 @@ const ClientsTable: React.FC<ClientsTableProps> = ({ clients }) => {
         page={page}
         onPageChange={handleChangePage}
         onRowsPerPageChange={handleChangeRowsPerPage}
-        labelRowsPerPage="Linhas por página:"
+        labelRowsPerPage="Linhas por pagina:"
         labelDisplayedRows={({ from, to, count }) => `${from}-${to} de ${count}`}
       />
 
-      {/* Menu de ações */}
+      {/* Actions menu */}
       <Menu
         anchorEl={anchorEl}
         open={Boolean(anchorEl)}
@@ -334,15 +334,11 @@ const ClientsTable: React.FC<ClientsTableProps> = ({ clients }) => {
       >
         <MenuItem onClick={() => selectedClient && navigate(`/client/${selectedClient}`)}>
           <Visibility sx={{ mr: 1 }} fontSize="small" />
-          Visualizar Detalhes
+          Analise do Cliente
         </MenuItem>
-        <MenuItem onClick={() => selectedClient && navigate(`/client/${selectedClient}`)}>
-          <Edit sx={{ mr: 1 }} fontSize="small" />
-          Editar Cliente
-        </MenuItem>
-        <MenuItem onClick={() => selectedClient && navigate(`/client/${selectedClient}`)}>
-          <Assessment sx={{ mr: 1 }} fontSize="small" />
-          Nova Análise
+        <MenuItem onClick={() => selectedClient && navigate(`/client/${selectedClient}/credit-limit`)}>
+          <CreditCard sx={{ mr: 1 }} fontSize="small" />
+          Configurar Limite
         </MenuItem>
       </Menu>
     </Paper>

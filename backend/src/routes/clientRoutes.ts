@@ -19,7 +19,36 @@ const filtersSchema = Joi.object({
   limit: Joi.number().integer().min(1).max(100).default(10)
 });
 
-// GET /api/clients - Buscar clientes com filtros e paginação
+/**
+ * @swagger
+ * /clients:
+ *   get:
+ *     summary: Listar clientes com filtros e paginacao
+ *     tags: [Clientes]
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           default: 1
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 10
+ *       - in: query
+ *         name: nome
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: string
+ *           enum: [ATIVO, INATIVO, BLOQUEADO]
+ *     responses:
+ *       200:
+ *         description: Lista paginada de clientes
+ */
 router.get('/', async (req, res, next) => {
   try {
     const { error, value } = filtersSchema.validate(req.query);
@@ -45,7 +74,33 @@ router.get('/', async (req, res, next) => {
   }
 });
 
-// GET /api/clients/:id - Buscar cliente por ID
+/**
+ * @swagger
+ * /clients/{id}:
+ *   get:
+ *     summary: Buscar cliente por ID
+ *     tags: [Clientes]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: Dados do cliente
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 data:
+ *                   $ref: '#/components/schemas/Client'
+ *       404:
+ *         description: Cliente nao encontrado
+ */
 router.get('/:id', async (req, res, next) => {
   try {
     const id = parseInt(req.params.id);
@@ -67,7 +122,24 @@ router.get('/:id', async (req, res, next) => {
   }
 });
 
-// GET /api/clients/:id/duplicatas - Buscar duplicatas do cliente
+/**
+ * @swagger
+ * /clients/{id}/duplicatas:
+ *   get:
+ *     summary: Buscar duplicatas (faturas) do cliente
+ *     tags: [Clientes]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: Lista de duplicatas
+ *       404:
+ *         description: Cliente nao encontrado
+ */
 router.get('/:id/duplicatas', async (req, res, next) => {
   try {
     const id = parseInt(req.params.id);
@@ -93,7 +165,24 @@ router.get('/:id/duplicatas', async (req, res, next) => {
   }
 });
 
-// GET /api/clients/:id/pagamentos - Buscar pagamentos do cliente
+/**
+ * @swagger
+ * /clients/{id}/pagamentos:
+ *   get:
+ *     summary: Buscar pagamentos do cliente
+ *     tags: [Clientes]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: Lista de pagamentos
+ *       404:
+ *         description: Cliente nao encontrado
+ */
 router.get('/:id/pagamentos', async (req, res, next) => {
   try {
     const id = parseInt(req.params.id);
@@ -119,7 +208,24 @@ router.get('/:id/pagamentos', async (req, res, next) => {
   }
 });
 
-// GET /api/clients/:id/statistics - Estatísticas do cliente
+/**
+ * @swagger
+ * /clients/{id}/statistics:
+ *   get:
+ *     summary: Estatisticas financeiras do cliente
+ *     tags: [Clientes]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: Estatisticas de duplicatas e pagamentos
+ *       404:
+ *         description: Cliente nao encontrado
+ */
 router.get('/:id/statistics', async (req, res, next) => {
   try {
     const id = parseInt(req.params.id);
